@@ -23,6 +23,7 @@ from .limit import LimitCSR
 from .sweep import SweepCSR
 from .relock import Relock
 from .modulate import Modulate, Demodulate
+from .sequence_player import SequencePlayer
 
 
 class FastChain(Module, AutoCSR):
@@ -33,6 +34,17 @@ class FastChain(Module, AutoCSR):
         self.x_tap = CSRStorage(2)
         self.brk = CSRStorage(1)
         self.y_tap = CSRStorage(2)
+
+        """self.data = Array([
+            CSRStorage(16384, name='data%d' % idx)
+            for idx in range(14)
+        ])
+        """
+        """for idx in range(4):
+            name = 'data%d' % idx
+            setattr(
+                self, name, CSRStorage(16384, name=name)
+            )"""
 
         x_hold = Signal()
         x_clear = Signal()
@@ -83,6 +95,10 @@ class FastChain(Module, AutoCSR):
             width=width, step_width=24, step_shift=18)
         self.submodules.mod = Modulate(width=width)
         self.submodules.y_limit = LimitCSR(width=width, guard=3)
+        self.submodules.sequence_player = SequencePlayer(
+            # FIXME: 16384
+            N_bits=14, N_points=128
+        )
 
         ###
 
@@ -144,7 +160,7 @@ class FastChain(Module, AutoCSR):
         ys = Array([self.iir_c.x, self.iir_c.y,
                     self.iir_d.y, self.iir_e.y >> s2])
         self.sync += ya.eq(
-            (self.mod.y + (dy >> s)) +
+            (self.mod.y + (dy >> s) + self.sequence_player.value) +
             (self.sweep.y + self.relock.y)),
         self.comb += [
             self.y_limit.x.eq((ys[self.y_tap.storage] >> s) + ya),

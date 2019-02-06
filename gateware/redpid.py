@@ -86,7 +86,7 @@ class ScopeGen(Module, AutoCSR):
                 o_sys_ack_o=self.scope_sys.ack,
         )
 
-        self.specials.asg = Instance("red_pitaya_asg",
+        """self.specials.asg = Instance("red_pitaya_asg",
                 o_dac_a_o=asg_a,
                 o_dac_b_o=asg_b,
                 i_dac_clk_i=ClockSignal(),
@@ -95,17 +95,26 @@ class ScopeGen(Module, AutoCSR):
                 i_trig_b_i=self.gpio_trigger,
                 o_trig_out_o=asg_trig,
 
-                i_sys_clk_i=self.asg_sys.clk,
-                i_sys_rstn_i=self.asg_sys.rstn,
-                i_sys_addr_i=self.asg_sys.addr,
-                i_sys_wdata_i=self.asg_sys.wdata,
-                i_sys_sel_i=self.asg_sys.sel,
-                i_sys_wen_i=self.asg_sys.wen,
-                i_sys_ren_i=self.asg_sys.ren,
-                o_sys_rdata_o=self.asg_sys.rdata,
-                o_sys_err_o=self.asg_sys.err,
-                o_sys_ack_o=self.asg_sys.ack,
-        )
+                #i_sys_clk_i=self.asg_sys.clk,
+                #i_sys_rstn_i=self.asg_sys.rstn,
+                i_sys_addr=self.asg_sys.addr,
+                i_sys_wdata=self.asg_sys.wdata,
+                #i_sys_sel_i=self.asg_sys.sel,
+                i_sys_wen=self.asg_sys.wen,
+                i_sys_ren=self.asg_sys.ren,
+                o_sys_rdata=self.asg_sys.rdata,
+                o_sys_err=self.asg_sys.err,
+                o_sys_ack=self.asg_sys.ack,
+        )"""
+
+
+class PIDCSR(Module, AutoCSR):
+    def __init__(self):
+        self.sync_sequences = Signal()
+        self.state_in = [self.sync_sequences]
+        self.signal_in = []
+        self.state_out = []
+        self.signal_out = []
 
 
 class Pid(Module):
@@ -114,8 +123,10 @@ class Pid(Module):
                 "dna": 28, "xadc": 29, "gpio_n": 30, "gpio_p": 31,
                 "fast_a": 0, "fast_b": 1,
                 "slow_a": 2, "slow_b": 3, "slow_c": 4, "slow_d": 5,
-                "scopegen": 6, "noise": 7,
+                "scopegen": 6, "noise": 7, 'root': 8
         }
+
+        self.submodules.root = PIDCSR()
 
         self.submodules.analog = PitayaAnalog(
                 platform.request("adc"), platform.request("dac"))
@@ -142,6 +153,12 @@ class Pid(Module):
         s, c = 25, 18
         self.submodules.fast_a = FastChain(14, s, c)
         self.submodules.fast_b = FastChain(14, s, c)
+
+        self.comb += [
+            self.fast_a.sequence_player.reset_sequence.eq(self.root.sync_sequences),
+            self.fast_b.sequence_player.reset_sequence.eq(self.root.sync_sequences)
+        ]
+
         sys_slow = ClockDomainsRenamer("sys_slow")
         self.submodules.slow_a = sys_slow(SlowChain(16, s, c))
         self.slow_a.iir.interval.value.value *= 15
@@ -160,30 +177,35 @@ class Pid(Module):
             ("slow_a", self.slow_a), ("slow_b", self.slow_b),
             ("slow_c", self.slow_c), ("slow_d", self.slow_d),
             ("scopegen", self.scopegen), ("noise", self.noise),
+            ("root", self.root)
         ])
 
         self.comb += [
-                self.scopegen.gpio_trigger.eq(self.gpio_p.i[0]),
-                self.scopegen.sweep_trigger_a.eq(self.fast_a.sweep.sweep.trigger),
-                self.scopegen.sweep_trigger_b.eq(self.fast_b.sweep.sweep.trigger),
+            self.scopegen.gpio_trigger.eq(self.gpio_p.i[0]),
+            self.scopegen.sweep_trigger_a.eq(self.fast_a.sweep.sweep.trigger),
+            self.scopegen.sweep_trigger_b.eq(self.fast_b.sweep.sweep.trigger),
 
-                self.fast_a.adc.eq(self.analog.adc_a),
-                self.fast_b.adc.eq(self.analog.adc_b),
-                self.analog.dac_a.eq(self.fast_a.dac),
-                self.analog.dac_b.eq(self.fast_b.dac),
-                self.slow_a.adc.eq(self.xadc.adc[0] << 4),
-                self.ds0.data.eq(self.slow_a.dac),
-                self.slow_b.adc.eq(self.xadc.adc[1] << 4),
-                self.ds1.data.eq(self.slow_b.dac),
-                self.slow_c.adc.eq(self.xadc.adc[2] << 4),
-                self.ds2.data.eq(self.slow_c.dac),
-                self.slow_d.adc.eq(self.xadc.adc[3] << 4),
-                self.ds3.data.eq(self.slow_d.dac),
+            self.fast_a.adc.eq(self.analog.adc_a),
+            self.fast_b.adc.eq(self.analog.adc_b),
+            self.analog.dac_a.eq(self.fast_a.dac),
+            self.analog.dac_b.eq(self.fast_b.dac),
+            self.slow_a.adc.eq(self.xadc.adc[0] << 4),
+            self.ds0.data.eq(self.slow_a.dac),
+            self.slow_b.adc.eq(self.xadc.adc[1] << 4),
+            self.ds1.data.eq(self.slow_b.dac),
+            self.slow_c.adc.eq(self.xadc.adc[2] << 4),
+            self.ds2.data.eq(self.slow_c.dac),
+            self.slow_d.adc.eq(self.xadc.adc[3] << 4),
+            self.ds3.data.eq(self.slow_d.dac),
         ]
 
-        self.submodules.csrbanks = csr_bus.CSRBankArray(self,
-                    lambda name, mem: csr_map[name if mem is None
-                        else name + "_" + mem.name_override])
+        def _get_name(name, mem):
+            key = name if mem is None else name + "_" + mem.name_override
+            if key in csr_map:
+                    return csr_map[key]
+            print('key missing', key)
+
+        self.submodules.csrbanks = csr_bus.CSRBankArray(self, _get_name)
         self.submodules.sys2csr = Sys2CSR()
         self.submodules.csrcon = csr_bus.Interconnect(self.sys2csr.csr,
                 self.csrbanks.get_buses())

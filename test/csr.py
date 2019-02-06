@@ -78,10 +78,31 @@ class PitayaCSR:
 
 
 class PitayaSSH(PitayaCSR):
-    def __init__(self, ssh_cmd='ssh root@rp-f0685a.local', monitor_cmd="/usr/bin/monitoradvanced"):
+    def __init__(self, ssh_cmd='ssh root@rp-f012ba.local', monitor_cmd="/usr/bin/monitoradvanced"):
         self.p = subprocess.Popen(' '.join([ssh_cmd, monitor_cmd, '-']).split(),
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE)
+        from time import sleep
+        # FIXME: eleganter!
+        sleep(.5)
+
+    def set_one(self, addr, value):
+        cmd = "0x{:08x} w 0x{:02x}\n\n".format(addr, value)
+        self.p.stdin.write(cmd.encode("ascii"))
+        self.p.stdin.flush()
+
+    def get_one(self, addr):
+        cmd = "0x{:08x} w\n\n".format(addr)
+        self.p.stdin.write(cmd.encode("ascii"))
+        self.p.stdin.flush()
+        ret = self.p.stdout.readline().decode("ascii")
+        return int(ret.split('[10]')[-1].strip())
+
+
+class PitayaLocal(PitayaCSR):
+    def __init__(self, monitor_cmd="/usr/bin/monitoradvanced"):
+        self.p = subprocess.Popen([monitor_cmd, '-'],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     def set_one(self, addr, value):
         cmd = "0x{:08x} w 0x{:02x}\n\n".format(addr, value)
@@ -131,7 +152,11 @@ class PitayaTB(PitayaCSR):
 if __name__ == "__main__":
     #p = PitayaReal("ssh -p 2201 root@localhost /opt/bin/monitor -")
     p = PitayaSSH()
+    from time import sleep
+    sleep(.5)
     #p = PitayaTB()
+    #from time import sleep
+    #sleep(.5)
     #p.start()
     #assert p.get("pid_version") == 1
     da = 0x2345
@@ -153,9 +178,9 @@ if __name__ == "__main__":
         fast_a_demod_delay=0xc00,
         fast_a_x_clear_en=0, #p.states("fast_a_x_sat"),
         fast_a_brk=0,
-        fast_a_dx_sel=p.signal("scopegen_dac_a"),
-        fast_a_y_tap=3,
-        fast_a_rx_sel=p.signal("fast_b_x"),
+        fast_a_dx_sel=p.signal("scopegen_dac_a"),#p.signal("zero"),
+        fast_a_y_tap=1,
+        fast_a_rx_sel=p.signal('zero'),#p.signal("fast_b_x"),
         fast_a_y_hold_en=p.states("fast_a_unlocked"),
         fast_a_y_clear_en=p.states("fast_a_y_railed"),
         fast_a_relock_run=0,
@@ -163,14 +188,17 @@ if __name__ == "__main__":
         fast_a_relock_step=200,
         fast_a_relock_min=4000,
         fast_a_relock_max=8191,
-        fast_a_sweep_run=100,
+        fast_a_sweep_run=0,
         #fast_a_sweep_step=1000,
         fast_a_sweep_step=0x00ffff,
-        fast_a_sweep_min=-8192,
-        fast_a_sweep_max=8191,
-        fast_a_mod_amp=0x0200,
+        fast_a_sweep_min=-8192/2,
+        fast_a_sweep_max=8191/2,
+
+        fast_a_mod_amp=0x0e00,
+        fast_a_mod_freq=0x10000000,
+        #fast_a_mod_amp=0x0,
         # 0x10000000 ~= 8 MHz
-        fast_a_mod_freq=0x00100000,
+        #fast_a_mod_freq=0x00000000,
         fast_a_dy_sel=p.signal("scopegen_dac_a"),
         fast_a_y_limit_min=-8192,
         fast_a_y_limit_max=8191,
@@ -179,15 +207,15 @@ if __name__ == "__main__":
         fast_b_x_tap=1,
         fast_b_brk=0,
         fast_b_dx_sel=p.signal("zero"),
-        fast_b_y_tap=0,
+        fast_b_y_tap=1,
         fast_b_y_clear_en=p.states("fast_b_y_railed"),
         #fast_b_mod_amp=0x0000,
         #fast_b_mod_freq=0x00001234,
         fast_b_mod_amp=0x0400,
         fast_b_mod_freq=0x10000000,
-        fast_b_dy_sel=p.signal("zero"),
+        fast_b_dy_sel=p.signal("scopegen_dac_b"),
 
-        fast_b_sweep_run=0,
+        fast_b_sweep_run=1,
         #fast_a_sweep_step=1000,
         fast_b_sweep_step=0x00ffff,
         fast_b_sweep_min=-8192/2,
@@ -202,11 +230,6 @@ if __name__ == "__main__":
         #scopegen_adc_a_sel=p.signal("fast_a_x"),
         scopegen_adc_a_sel=p.signal("fast_a_x"),
         scopegen_adc_b_sel=p.signal("fast_a_y"),
-        # acquisition trigger of scopegen:
-        #   0 --> GPIO trigger pin
-        #   1 --> channel A sweep turning point
-        #   2 --> channel A sweep turning point
-        scopegen_external_trigger=2,
 
         gpio_p_oes=0,
         gpio_n_oes=0xff,
