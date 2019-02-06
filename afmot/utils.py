@@ -1,56 +1,13 @@
 import numpy as np
 import subprocess
 from os import path
-from devices import RedPitaya, connect_to_device_service
+from devices import connect_to_device_service
 
 REPLAY_SHIFT = -200-24
 LENGTH = 16384
 
-measure_rp_ip = 'rp-f04f45.local'
-measure_rp = RedPitaya(measure_rp_ip, delay_scpi_connection=True)
-
-pid_rp_ip = 'rp-f04f8b.local'
-pid_rp = RedPitaya(pid_rp_ip, delay_scpi_connection=True)
-
-def get_triggered_data(data, should_start_low):
-    starts_low = data[0] < 0
-
-    idx_offset = 0
-
-    if (should_start_low and not starts_low) or (not should_start_low and starts_low):
-        l = int(len(data) / 2)
-        data = list(data[l:]) + list(data[:l])
-        idx_offset = l
-        if should_start_low:
-            assert data[0] < 0
-        else:
-            assert data[0] > 0
-
-    if should_start_low:
-        trigger_idx = list(
-            np.array(data) > 0
-        ).index(True)
-    else:
-        trigger_idx = list(
-            np.array(data) < 0
-        ).index(True)
-
-    trigger_idx -= 220
-
-    data = list(data[trigger_idx:]) + list(data[:trigger_idx])
-    return trigger_idx + idx_offset, data
-
 def do(cmd):
     subprocess.call(cmd, shell=True)
-
-def remote(py_fn, rp=pid_rp):
-    stdin, stdout, stderr = rp.registers.execute('/usr/bin/python2.7 /jumps/%s' % py_fn)
-    status = stdout.channel.recv_exit_status()
-
-    if status != 0:
-        raise Exception(status)
-
-    return stdin, stdout, stderr
 
 
 def copy_file(fn, ip):
@@ -79,6 +36,7 @@ def acquire(N, decimation):
         for row in rows
     ]
     return np.array(rows)
+
 
 def get_shifted(d, shift):
     length = len(d)

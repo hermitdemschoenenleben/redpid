@@ -1,7 +1,7 @@
 import numpy as np
 from time import sleep, time
 
-from csr import make_filter, PitayaLocal, PitayaSSH
+from csr import make_filter, PitayaLocal, PitayaSSHCustom
 from utils import LENGTH
 from devices import RedPitaya
 
@@ -11,7 +11,6 @@ class Pitaya:
         self.host = host
         self.user = user
         self.password = password
-        self.scpi = RedPitaya(host, delay_scpi_connection=True)
 
         self._cached_data = {}
         self.parameters = {
@@ -20,10 +19,12 @@ class Pitaya:
         }
 
     def connect(self):
+        self.scpi = RedPitaya(self.host, delay_scpi_connection=True)
+
         self.use_ssh = self.host is not None and self.host != 'localhost'
 
         if self.use_ssh:
-            self.pitaya = PitayaSSH(
+            self.pitaya = PitayaSSHCustom(
                 ssh_cmd="sshpass -p %s ssh %s@%s" % (self.password, self.user, self.host)
             )
             # FIXME: das geht eleganter
@@ -103,24 +104,66 @@ class Pitaya:
         self.pitaya.set('fast_b_y_clear_en', self.pitaya.states())
         self.pitaya.set('fast_b_x_clear_en', self.pitaya.states())
 
-    def start_clock(self, percentage):
+    def _load_sequence(self, channel, data):
+        assert channel in ('a', 'b'), 'invalid channel'
+        channel = 'fast_%s_sequence_player' % channel
+
+        for addr, value in enumerate(data):
+            print(addr, value)
+            self.pitaya.set('%s_data_addr' % channel, addr)
+            self.pitaya.set('%s_data_in' % channel, value)
+            self.pitaya.set('%s_data_write' % channel, 1)
+            self.pitaya.set('%s_data_write' % channel, 0)
+
+        print('enable')
+        self.pitaya.set('%s_enabled' % channel, 1)
+        print('enabled')
+
+    def start_clock(self, length, percentage):
         data = []
 
-        for i in range(LENGTH):
-            if i < percentage * LENGTH:
-                data.append(0)
+        for i in range(length):
+            if i < percentage * length:
+                data.append(8191)
             else:
-                data.append(1)
+                data.append(0)
 
-        out = self.scpi.fast_out[1]
-        out.wave_form = 'ARBITRARY'
-        out.waveform_data = data
-        out.frequency = 7629.394531249999 / int(self.parameters['decimation'])
-        out.enabled = True
+        self._load_sequence('b', data)
 
     def set_feed_forward(self, feedforward):
-        out = self.scpi.fast_out[0]
-        out.wave_form = 'ARBITRARY'
-        out.waveform_data = feedforward
-        out.frequency = 7629.394531249999 / int(self.parameters['decimation'])
-        out.enabled = True
+        self._load_sequence('a', feedforward)
+
+    def set_proportional(self, p):
+        self.parameters['p'] = p
+        self.write_registers()
+
+    def record_control(self):
+        # TODO: früher machen?
+        self.scpi.set_acquisition_trigger('EXT_PE', decimation=1, delay=8192)
+        while not self.scpi.was_triggered():
+            sleep(0.1)
+
+        control = rp.fast_in[XXX].get_buffer()
+
+        data = []
+
+        x_axis = np.linspace(0, DURATION*1e6, LENGTH)
+
+        r.scope.trigger_source = 'ext_positive_edge'
+        sleep(.1)
+        measured_control = list(r.scope.curve()[0, :])
+        before = measured_control
+        measured_control = measured_control + measured_control
+        offset = 8192 + int(234 / DECIMATION)
+        measured_control = measured_control[offset:offset+int(LENGTH / FREQUENCY_MULTIPLIER)]
+        """plt.plot(before, label='before')
+        plt.plot(measured_control, label='mc')
+        plt.legend()
+        plt.show()"""
+
+        data.append(measured_control)
+
+        #plt.plot(measured_control)
+        #plt.show()
+
+        return x_axis, data

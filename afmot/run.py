@@ -4,10 +4,9 @@ import numpy as np
 from time import sleep
 from matplotlib import pyplot as plt
 
-from utils import do, remote, copy_file, \
-    measure_rp, measure_rp_ip, pid_rp_ip, pid_rp, counter_measurement, \
-    acquire, get_shifted, save_osci, replay_pyrpl, clock, copy_pid, \
-    REPLAY_SHIFT
+from utils import do, copy_file, \
+    counter_measurement, \
+    acquire, get_shifted, save_osci, replay_pyrpl, REPLAY_SHIFT
 from process_control import process_control_data, replay_remote
 from registers import Pitaya
 
@@ -27,36 +26,6 @@ PROPORTIONAL = {
     30: -200,
     35: -100
 }
-
-
-def record_control():
-    data = []
-
-    x_axis = np.linspace(0, DURATION*1e6, LENGTH)
-
-    r.scope.trigger_source = 'ext_positive_edge'
-    sleep(.1)
-    measured_control = list(r.scope.curve()[0, :])
-    before = measured_control
-    measured_control = measured_control + measured_control
-    offset = 8192 + int(234 / DECIMATION)
-    measured_control = measured_control[offset:offset+int(LENGTH / FREQUENCY_MULTIPLIER)]
-    """plt.plot(before, label='before')
-    plt.plot(measured_control, label='mc')
-    plt.legend()
-    plt.show()"""
-
-    data.append(measured_control)
-
-    #plt.plot(measured_control)
-    #plt.show()
-
-    return x_axis, data
-
-
-def set_proportional(p):
-    print('set proportional', p)
-    remote('set_p.py %d' % p, measure_rp)
 
 
 def fine_lock_and_save_osci(name):
@@ -86,31 +55,30 @@ if __name__ == '__main__':
     #rp.start_clock(.5)
     #rp.set_feed_forward([0])
 
-    from random import randint
-    for channel in ('a',):
-        rp.pitaya.set('fast_%s_sequence_player_enabled' % channel, 0)
+    """    from random import randint
+    for channel in ('b',):
+        rp.pitaya.set('fast_%s_sequence_player_enabled' % channel, 1)
 
-        for i in range(20):
-            i += 100
-            rp.pitaya.set('fast_%s_sequence_player_ds_data_addr' % channel, i)
-            rp.pitaya.set('fast_%s_sequence_player_ds_data_in' % channel, 00000)
-            rp.pitaya.set('fast_%s_sequence_player_ds_data_write' % channel, 1)
-            rp.pitaya.set('fast_%s_sequence_player_ds_data_write' % channel, 0)
+        for i in range((1<<12) - 1):
+            print(i)
+            i += 1<<12
+            rp.pitaya.set('fast_%s_sequence_player_data_addr' % channel, i)
+            rp.pitaya.set('fast_%s_sequence_player_data_in' % channel, 8191)
+            rp.pitaya.set('fast_%s_sequence_player_data_write' % channel, 1)
+            rp.pitaya.set('fast_%s_sequence_player_data_write' % channel, 0)
 
         rp.pitaya.set('fast_%s_sequence_player_enabled' % channel, 1)
 
-    """print('end')
+    asd"""
 
-    copy_file('reset_int.py', measure_rp_ip)
-    copy_file('set_p.py', measure_rp_ip)
-    copy_file('stop_pyrpl.py', measure_rp_ip)
-    copy_file('registers.py', measure_rp_ip)
-    copy_file('prepare.py', measure_rp_ip)
-    copy_file('reset_pyrpl.py', measure_rp_ip)
+    length = 16381
+    rp.start_clock(length, .5)
+    asd
+    """ff = [0] * length
+    rp.set_feed_forward(ff)
+    """
 
-    clock(r, 1-0.6, decimation=DECIMATION/FREQUENCY_MULTIPLIER)
-    copy_pid(r)
-
+    """
     datas = []
     raw_datas = []
 
@@ -123,12 +91,12 @@ if __name__ == '__main__':
     sleep(1)
 
     # this applies decimation
-
+    """
     last_proportional = 0
 
     for i in range(38):
         if i in PROPORTIONAL:
-            set_proportional(PROPORTIONAL[i])
+            rp.set_proportional(PROPORTIONAL[i])
             last_proportional = PROPORTIONAL[i]
 
         print('---- I=%d ----' % i)
@@ -136,10 +104,9 @@ if __name__ == '__main__':
         #remote('reset_int.py', measure_rp)
         sleep(.5)
 
-        if i == 0:# or (i > 5 and i % 10 == 0):
+        if i == 0:
             input('ok?')
 
-        #if (i % 3 == 0 and i > 9):
         if False:
             fine_lock_and_save_osci(str(i))
 
@@ -186,4 +153,4 @@ if __name__ == '__main__':
     set_proportional(-10)
 
     plt.grid()
-    plt.show()"""
+    plt.show()

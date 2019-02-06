@@ -7,9 +7,7 @@ from os import path
 import pandas
 import subprocess
 from devices import RedPitaya
-from utils import do, remote, copy_file, \
-    pid_rp_ip, pid_rp, get_shifted, clock, copy_pid, replay_pyrpl, \
-    REPLAY_SHIFT, LENGTH, measure_rp
+from utils import do, get_shifted,REPLAY_SHIFT, LENGTH
 
 
 def get_index_for_combining(data, filtered, max_=1, return_start_idx=False):

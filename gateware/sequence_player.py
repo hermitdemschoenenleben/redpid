@@ -42,8 +42,8 @@ class SequencePlayer(Module, AutoCSR):
     def replay_data(self):
         self.reset_sequence = Signal()
         self.replay_counter = Signal(bits_for(self.N_points - 1))
-        self.value_internal = Signal(self.N_bits)
-        self.value = Signal(self.N_bits)
+        self.value_internal = Signal((self.N_bits, True))
+        self.value = Signal((self.N_bits, True))
         self.enabled = CSRStorage()
 
         self.comb += [

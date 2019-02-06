@@ -96,8 +96,7 @@ class FastChain(Module, AutoCSR):
         self.submodules.mod = Modulate(width=width)
         self.submodules.y_limit = LimitCSR(width=width, guard=3)
         self.submodules.sequence_player = SequencePlayer(
-            # FIXME: 16384
-            N_bits=14, N_points=128
+            N_bits=14, N_points=16384
         )
 
         ###

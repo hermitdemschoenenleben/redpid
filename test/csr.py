@@ -99,6 +99,28 @@ class PitayaSSH(PitayaCSR):
         return int(ret.split('[10]')[-1].strip())
 
 
+class PitayaSSHCustom(PitayaCSR):
+    def __init__(self, ssh_cmd='ssh root@rp-f012ba.local', monitor_cmd="python3 /root/register_server.py"):
+        self.p = subprocess.Popen(' '.join([ssh_cmd, monitor_cmd, '-']).split(),
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE)
+        from time import sleep
+        # FIXME: eleganter!
+        sleep(.5)
+
+    def set_one(self, addr, value):
+        cmd = "%d %d\n" % (addr, value)
+        self.p.stdin.write(cmd.encode("ascii"))
+        self.p.stdin.flush()
+
+    def get_one(self, addr):
+        cmd = "%d\n" % (addr)
+        self.p.stdin.write(cmd.encode("ascii"))
+        self.p.stdin.flush()
+        ret = self.p.stdout.readline().decode("ascii")
+        return int(ret)
+
+
 class PitayaLocal(PitayaCSR):
     def __init__(self, monitor_cmd="/usr/bin/monitoradvanced"):
         self.p = subprocess.Popen([monitor_cmd, '-'],
