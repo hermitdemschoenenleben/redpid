@@ -30,6 +30,7 @@ def sequence_player_testbench(dut, N_bits, N_points):
 
     def gen_val(i):
         return i
+        #return -1 * (1 << (N_bits - 1))
 
     for address, [i1, i2] in enumerate(zip(points[0::2], points[1::2])):
         yield from dut.data_addr.write(address)
@@ -48,6 +49,7 @@ def sequence_player_testbench(dut, N_bits, N_points):
 
     # replay data and record data
     yield from dut.enabled.write(1)
+
     yield dut.reset_sequence.eq(0)
 
     for i in range(4):

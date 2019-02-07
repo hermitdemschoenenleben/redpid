@@ -20,31 +20,46 @@ from misoc.interconnect.csr import AutoCSR, CSRStorage, CSRStatus, CSR
 
 from .iir import Iir
 from .limit import LimitCSR
-from .sweep import SweepCSR
-from .relock import Relock
-from .modulate import Modulate, Demodulate
+#from .sweep import SweepCSR
+#from .relock import Relock
+#from .modulate import Modulate, Demodulate
 from .sequence_player import SequencePlayer
 
 
+class ClockChain(Module, AutoCSR):
+    def __init__(self, width=14, signal_width=25, coeff_width=18):
+        self.dac = Signal((width, True))
+
+        clock_high = Signal()
+
+        self.state_in = tuple()
+        self.state_out = [clock_high]
+        self.signal_in = tuple()
+        self.signal_out = tuple()
+
+        self.submodules.sequence_player = SequencePlayer(
+            True, N_bits=14, N_points=16384
+        )
+
+        self.comb += [
+            clock_high.eq(self.sequence_player.value & 0b1)
+        ]
+
+        self.comb += [
+            self.dac.eq(
+                self.sequence_player.value
+            )
+        ]
+
+
 class FastChain(Module, AutoCSR):
-    def __init__(self, is_clock, width=14, signal_width=25, coeff_width=18):
+    def __init__(self, width=14, signal_width=25, coeff_width=18):
         self.adc = Signal((width, True))
         self.dac = Signal((width, True))
 
         self.x_tap = CSRStorage(2)
         self.brk = CSRStorage(1)
         self.y_tap = CSRStorage(2)
-
-        """self.data = Array([
-            CSRStorage(16384, name='data%d' % idx)
-            for idx in range(14)
-        ])
-        """
-        """for idx in range(4):
-            name = 'data%d' % idx
-            setattr(
-                self, name, CSRStorage(16384, name=name)
-            )"""
 
         x_hold = Signal()
         x_clear = Signal()
@@ -54,12 +69,12 @@ class FastChain(Module, AutoCSR):
         y_clear = Signal()
         y_sat = Signal()
         y_railed = Signal()
-        relock = Signal()
-        unlocked = Signal()
-        sweep_trigger = Signal()
+        #relock = Signal()
+        #unlocked = Signal()
+        #sweep_trigger = Signal()
 
-        self.state_in = x_hold, x_clear, y_hold, y_clear, relock
-        self.state_out = x_sat, x_railed, y_sat, y_railed, unlocked
+        self.state_in = x_hold, x_clear, y_hold, y_clear#, relock
+        self.state_out = x_sat, x_railed, y_sat, y_railed#, unlocked
 
         x = Signal((signal_width, True))
         dx = Signal((signal_width, True))
@@ -68,14 +83,14 @@ class FastChain(Module, AutoCSR):
         rx = Signal((signal_width, True))
 
         self.signal_in = dx, dy, rx
-        self.signal_out = x, y, sweep_trigger
+        self.signal_out = x, y#, sweep_trigger
 
         ###
 
         self.submodules.iir_a = Iir(
             width=signal_width, coeff_width=coeff_width, shift=coeff_width-2,
             order=1)
-        self.submodules.demod = Demodulate(width=width)
+        #self.submodules.demod = Demodulate(width=width)
         self.submodules.iir_b = Iir(
             width=2*coeff_width, coeff_width=signal_width,
             shift=signal_width-2, order=2, mode="iterative")
@@ -89,14 +104,14 @@ class FastChain(Module, AutoCSR):
         self.submodules.iir_e = Iir(
             width=2*coeff_width, coeff_width=signal_width,
             shift=signal_width-2, order=2, mode="iterative")
-        self.submodules.relock = Relock(
-            width=width + 1, step_width=24, step_shift=16)
-        self.submodules.sweep = SweepCSR(
-            width=width, step_width=24, step_shift=18)
-        self.submodules.mod = Modulate(width=width)
+        #self.submodules.relock = Relock(
+        #    width=width + 1, step_width=24, step_shift=16)
+        #self.submodules.sweep = SweepCSR(
+        #    width=width, step_width=24, step_shift=18)
+        #self.submodules.mod = Modulate(width=width)
         self.submodules.y_limit = LimitCSR(width=width, guard=3)
         self.submodules.sequence_player = SequencePlayer(
-            is_clock, N_bits=14, N_points=16384
+            False, N_bits=14, N_points=16384
         )
 
         ###
@@ -109,10 +124,11 @@ class FastChain(Module, AutoCSR):
             self.iir_a.hold.eq(x_hold),
             self.iir_a.clear.eq(x_clear),
 
-            self.demod.x.eq(self.iir_a.y >> s),
-            self.demod.phase.eq(self.mod.phase),
+            #self.demod.x.eq(self.iir_a.y >> s),
+            #self.demod.phase.eq(self.mod.phase),
 
-            self.iir_b.x.eq(self.demod.y << s1),
+            #self.iir_b.x.eq(self.demod.y << s1),
+            self.iir_b.x.eq(self.iir_a.y >> (s - s1)),
             self.iir_b.hold.eq(x_hold),
             self.iir_b.clear.eq(x_clear),
 
@@ -146,21 +162,25 @@ class FastChain(Module, AutoCSR):
                 (self.iir_e.error & (self.y_tap.storage > 3))
             ),
 
-            self.sweep.clear.eq(0),
-            self.sweep.hold.eq(0),
-            sweep_trigger.eq(self.sweep.sweep.trigger),
+            #self.sweep.clear.eq(0),
+            #self.sweep.hold.eq(0),
+            #sweep_trigger.eq(self.sweep.sweep.trigger),
 
-            self.relock.x.eq(rx >> s),
-            self.relock.clear.eq(self.y_limit.error),
-            self.relock.hold.eq(relock),
-            unlocked.eq(self.relock.error)
+            #self.relock.x.eq(rx >> s),
+            #self.relock.clear.eq(self.y_limit.error),
+            #self.relock.hold.eq(relock),
+            #unlocked.eq(self.relock.error)
         ]
         ya = Signal((width + 3, True))
         ys = Array([self.iir_c.x, self.iir_c.y,
                     self.iir_d.y, self.iir_e.y >> s2])
         self.sync += ya.eq(
-            (self.mod.y + (dy >> s) + self.sequence_player.value) +
-            (self.sweep.y + self.relock.y)),
+            (
+                #self.mod.y + (dy >> s) +
+                self.sequence_player.value
+            )
+            #+ (self.sweep.y + self.relock.y)
+        ),
         self.comb += [
             self.y_limit.x.eq((ys[self.y_tap.storage] >> s) + ya),
             y.eq(self.y_limit.y << s),
@@ -169,6 +189,9 @@ class FastChain(Module, AutoCSR):
             self.dac.eq(self.y_limit.y)
         ]
 
+        self.comb += [
+            self.sequence_player.output.eq(self.y_limit.y),
+        ]
 
 class SlowChain(Module, AutoCSR):
     def __init__(self, width=16, signal_width=25, coeff_width=18):

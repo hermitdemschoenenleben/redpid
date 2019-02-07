@@ -53,53 +53,48 @@ if __name__ == '__main__':
     rp.connect()
     rp.write_registers()
 
-    """    from random import randint
-    for channel in ('b',):
-        rp.pitaya.set('fast_%s_sequence_player_enabled' % channel, 1)
-
-        for i in range((1<<12) - 1):
-            print(i)
-            i += 1<<12
-            rp.pitaya.set('fast_%s_sequence_player_data_addr' % channel, i)
-            rp.pitaya.set('fast_%s_sequence_player_data_in' % channel, 8191)
-            rp.pitaya.set('fast_%s_sequence_player_data_write' % channel, 1)
-            rp.pitaya.set('fast_%s_sequence_player_data_write' % channel, 0)
-
-        rp.pitaya.set('fast_%s_sequence_player_enabled' % channel, 1)
-
-    asd"""
-
-    length = 16381
+    N_points = 16384
     N_bits = 14
-    """rp.set_feed_forward([
-        i - 8192 for i in range(16384)
-    ])"""
-    #rp.start_clock(length, .5, N_bits)
     rp.pitaya.set('fast_a_sequence_player_enabled', 0)
+
+    """rp.set_feed_forward([
+        i - 8192
+        for i in range(16384)
+    ], N_bits)"""
+    rp.set_feed_forward(
+        ([-8191] * 4096) \
+        + ([-7000] * 4096) \
+        + ([-1] * 4096) \
+        + ([8191] * 4096),
+        N_bits
+    )
+    rp.sync()
+
+    rp.start_clock(N_points, .5)
+
+    rp.pitaya.set('fast_a_sequence_player_enabled', 1)
     rp.pitaya.set('fast_b_sequence_player_enabled', 1)
 
-    from time import sleep
-    sleep(5)
-    rp.record_control()
-    asd
-    """ff = [0] * length
-    rp.set_feed_forward(ff, N_bits)
-    """
+    rp.pitaya.set('root_sync_sequences_en', 1)
+    rp.pitaya.set('root_sync_sequences_en', 0)
 
-    """
+
+    from matplotlib import pyplot as plt
+    data = rp.record_control()
+    plt.plot(data)
+    plt.show()
+
+    for i in range(5):
+        print('I', i)
+        data = rp.record_control()
+        plt.plot(data)
+        rp.set_feed_forward(data, N_bits)
+
+    plt.show()
+    asd
+
     datas = []
     raw_datas = []
-
-    r.scope.decimation = DECIMATION
-    r.scope.input1 = 'out1'
-    r.scope.input2 = 'out2'
-
-    remote('prepare.py', measure_rp)
-    remote('reset_int.py 1', measure_rp)
-    sleep(1)
-
-    # this applies decimation
-    """
     last_proportional = 0
 
     for i in range(38):
@@ -108,9 +103,9 @@ if __name__ == '__main__':
             last_proportional = PROPORTIONAL[i]
 
         print('---- I=%d ----' % i)
-        remote('reset_int.py 0', measure_rp)
+        #remote('reset_int.py 0', measure_rp)
         #remote('reset_int.py', measure_rp)
-        sleep(.5)
+        #sleep(.5)
 
         if i == 0:
             input('ok?')
@@ -118,7 +113,7 @@ if __name__ == '__main__':
         if False:
             fine_lock_and_save_osci(str(i))
 
-        x_axis, data = record_control()
+        data = rp.record_control()
         raw_datas.append(data)
 
         with open('control_raw.json', 'w') as f:

@@ -21,6 +21,7 @@ class SequencePlayer(Module, AutoCSR):
         self.reset_sequence = Signal()
         self.value_internal = Signal((self.N_bits, True))
         self.value = Signal((self.N_bits, True))
+
         self.comb += [
             self.value.eq(
                 Mux(
@@ -35,6 +36,7 @@ class SequencePlayer(Module, AutoCSR):
 
         if self.is_clock:
             self.dcycle = CSRStorage(bits_for(self.N_points - 1))
+            self.clock_max = CSRStorage(N_bits)
             self.play_clock()
         else:
             # initialize buffer for feed forward
@@ -46,7 +48,7 @@ class SequencePlayer(Module, AutoCSR):
             self.specials += self.ff_rdport, self.ff_wrport
 
             # initialize buffer for recorded output
-            self.specials.recorded = Memory(N_bits, N_points, name='recorded')
+            self.specials.recorded = Memory(self.N_bits, N_points, name='recorded')
             self.rec_rdport = self.recorded.get_port()
             self.rec_wrport = self.recorded.get_port(write_capable=True)
 
@@ -75,7 +77,7 @@ class SequencePlayer(Module, AutoCSR):
         self.data_addr = CSRStorage(bits_for(int(self.N_points / 2) - 1))
         #self.data_write = CSRStorage(1)
 
-        self.comb += [
+        self.sync += [
             #self.ff_wrport.we.eq(self.data_write.storage),
             self.ff_wrport.we.eq(1),
             self.ff_wrport.adr.eq(self.data_addr.storage),
@@ -86,7 +88,7 @@ class SequencePlayer(Module, AutoCSR):
         self.comb += [
             If(self.counter < self.dcycle.storage,
                 self.value_internal.eq(
-                    (1 << self.N_bits) - 1
+                    self.clock_max.storage
                 )
             ).Else(
                 self.value_internal.eq(0)
@@ -99,7 +101,7 @@ class SequencePlayer(Module, AutoCSR):
         shift = ((self.counter ^ 0b1) & 0b1) * self.N_bits
         mask = ((1 << self.N_bits) - 1) << shift
 
-        self.comb += [
+        self.sync += [
             self.ff_rdport.adr.eq(self.counter >> 1),
             self.value_internal.eq(
                 (self.ff_rdport.dat_r & mask) >> shift
@@ -107,21 +109,21 @@ class SequencePlayer(Module, AutoCSR):
         ]
 
     def record_output(self):
+        # TODO: hier könnte man auch 2 Werte pro Register speichern
+        # is connected by FastChain
         self.output = Signal((self.N_bits, True))
 
         self.recording = CSRStorage()
 
-        self.comb += [
-            # FIXME: OUTPUT SOLLTE ECHTER OUTPUT SEIN!!
+        self.sync += [
             self.rec_wrport.we.eq(self.recording.storage),
             self.rec_wrport.adr.eq(self.counter),
-            self.rec_wrport.dat_w.eq(self.output),
+            self.rec_wrport.dat_w.eq(self.output)
         ]
 
         self.end_counter = Signal(2)
 
         self.sync += [
-            # FIXME: Length - 1
             If(self.recording.storage,
                 If(self.counter == 0,
                     self.end_counter.eq(self.end_counter + 1)
@@ -143,7 +145,7 @@ class SequencePlayer(Module, AutoCSR):
         self.data_out = CSRStatus(self.N_bits)
         self.data_out_addr = CSRStorage(bits_for(self.N_points - 1))
 
-        self.comb += [
+        self.sync += [
             self.rec_rdport.adr.eq(self.data_out_addr.storage),
             self.data_out.status.eq(self.rec_rdport.dat_r),
         ]

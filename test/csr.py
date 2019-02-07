@@ -99,14 +99,70 @@ class PitayaSSH(PitayaCSR):
         return int(ret.split('[10]')[-1].strip())
 
 
+class BatchReader:
+    def __init__(self, parent):
+        self.parent = parent
+
+    def __enter__(self):
+        self.parent._batch_reads = True
+
+    def __exit__(self, exception_type, exception_val, trace):
+        self.parent._batch_reads = False
+        self.parent._read_batch()
+
+
+class BatchReadPromise:
+    def __init__(self):
+        self.value = None
+
+    def __int__(self):
+        return int(self.value)
+
+
+class DelayedCalculation:
+    def __init__(self, callback):
+        self.callback = callback
+
+    def __int__(self):
+        return int(self.callback())
+
+
 class PitayaSSHCustom(PitayaCSR):
     def __init__(self, ssh_cmd='ssh root@rp-f012ba.local', monitor_cmd="python3 /root/register_server.py"):
         self.p = subprocess.Popen(' '.join([ssh_cmd, monitor_cmd, '-']).split(),
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE)
+
         from time import sleep
         # FIXME: eleganter!
         sleep(.5)
+
+        self._batch_reads = False
+        self._batch_read_promises = []
+        self.batch_reads = BatchReader(self)
+
+    def get(self, name):
+        if name in self.constants:
+            return self.constants[name]
+
+        map, addr, nr, wr = self.map[name]
+        v = 0
+        b = (nr + 8 - 1)//8
+
+        values = []
+        for i in range(b):
+            values.append(self.get_one(self.offset + (map << 11) + ((addr + i)<<2)))
+
+        def calc(values=values, b=b):
+            v = 0
+            for i in range(b):
+                value = values[i]
+                v |= int(value) << 8*(b - i - 1)
+            return v
+
+        if self._batch_reads:
+            return DelayedCalculation(calc)
+        return calc()
 
     def set_one(self, addr, value):
         cmd = "%d %d\n" % (addr, value)
@@ -117,8 +173,23 @@ class PitayaSSHCustom(PitayaCSR):
         cmd = "%d\n" % (addr)
         self.p.stdin.write(cmd.encode("ascii"))
         self.p.stdin.flush()
+
+        if not self._batch_reads:
+            return self._read()
+
+        promise = BatchReadPromise()
+        self._batch_read_promises.append(promise)
+        return promise
+
+    def _read(self):
         ret = self.p.stdout.readline().decode("ascii")
         return int(ret)
+
+    def _read_batch(self):
+        while len(self._batch_read_promises) > 0:
+            promise = self._batch_read_promises.pop(0)
+
+            promise.value = self._read()
 
 
 class PitayaLocal(PitayaCSR):
