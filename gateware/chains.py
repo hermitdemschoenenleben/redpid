@@ -27,7 +27,7 @@ from .sequence_player import SequencePlayer
 
 
 class FastChain(Module, AutoCSR):
-    def __init__(self, width=14, signal_width=25, coeff_width=18):
+    def __init__(self, is_clock, width=14, signal_width=25, coeff_width=18):
         self.adc = Signal((width, True))
         self.dac = Signal((width, True))
 
@@ -96,7 +96,7 @@ class FastChain(Module, AutoCSR):
         self.submodules.mod = Modulate(width=width)
         self.submodules.y_limit = LimitCSR(width=width, guard=3)
         self.submodules.sequence_player = SequencePlayer(
-            N_bits=14, N_points=16384
+            is_clock, N_bits=14, N_points=16384
         )
 
         ###

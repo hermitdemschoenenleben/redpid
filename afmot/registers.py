@@ -105,33 +105,34 @@ class Pitaya:
         self.pitaya.set('fast_b_y_clear_en', self.pitaya.states())
         self.pitaya.set('fast_b_x_clear_en', self.pitaya.states())
 
-    def _load_sequence(self, channel, data):
+    def _load_sequence(self, channel, data, N_bits):
         assert channel in ('a', 'b'), 'invalid channel'
         channel = 'fast_%s_sequence_player' % channel
 
-        for addr, value in enumerate(data):
-            print(addr, value)
+        for addr, [v1, v2] in enumerate(zip(data[0::2], data[1::2])):
+            # two 14-bit values are saved in a single register
+            # register width is 32 bits of which we use 28
+            print(addr, v1, v2)
             self.pitaya.set('%s_data_addr' % channel, addr)
-            self.pitaya.set('%s_data_in' % channel, value)
+            self.pitaya.set('%s_data_in' % channel, v1 + (v2 << N_bits))
             #self.pitaya.set('%s_data_write' % channel, 1)
             #self.pitaya.set('%s_data_write' % channel, 0)
 
         self.pitaya.set('%s_enabled' % channel, 1)
 
-    def start_clock(self, length, percentage):
+    def start_clock(self, length, percentage, N_bits):
         data = []
 
         for i in range(length):
             if i < percentage * length:
                 data.append(8191)
             else:
-                # FIXME: not 0
-                data.append(1000)
+                data.append(0)
 
-        self._load_sequence('b', data)
+        self._load_sequence('b', data, N_bits)
 
-    def set_feed_forward(self, feedforward):
-        self._load_sequence('a', feedforward)
+    def set_feed_forward(self, feedforward, N_bits):
+        self._load_sequence('a', feedforward, N_bits)
 
     def set_proportional(self, p):
         self.parameters['p'] = p

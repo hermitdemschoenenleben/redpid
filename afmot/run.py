@@ -70,10 +70,11 @@ if __name__ == '__main__':
     asd"""
 
     length = 16381
+    N_bits = 14
     """rp.set_feed_forward([
         i - 8192 for i in range(16384)
     ])"""
-    #rp.start_clock(length, .5)
+    #rp.start_clock(length, .5, N_bits)
     rp.pitaya.set('fast_a_sequence_player_enabled', 0)
     rp.pitaya.set('fast_b_sequence_player_enabled', 1)
 
@@ -82,7 +83,7 @@ if __name__ == '__main__':
     rp.record_control()
     asd
     """ff = [0] * length
-    rp.set_feed_forward(ff)
+    rp.set_feed_forward(ff, N_bits)
     """
 
     """

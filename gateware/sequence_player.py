@@ -4,42 +4,75 @@ from migen.genlib.cdc import MultiReg, GrayCounter
 
 
 class SequencePlayer(Module, AutoCSR):
-    def __init__(self, N_bits=14, N_points=16384):
+    def __init__(self, is_clock, N_bits=14, N_points=16384):
         allowed_N_points = [
             1 << shift
             for shift in range(16)
+            if shift > 0
         ]
         assert N_points in allowed_N_points, \
             'invalid N_points, allowed: %s' % allowed_N_points
 
+        self.is_clock = is_clock
         self.N_bits = N_bits
         self.N_points = N_points
 
-        # initialize buffer for feed forward
-        # TODO: using initial values may be helpful
-        self.specials.feedforward = Memory(N_bits, N_points, name='feedforward')
+        self.enabled = CSRStorage()
+        self.reset_sequence = Signal()
+        self.value_internal = Signal((self.N_bits, True))
+        self.value = Signal((self.N_bits, True))
+        self.comb += [
+            self.value.eq(
+                Mux(
+                    self.enabled.storage & ((~self.reset_sequence) & 0b1),
+                    self.value_internal,
+                    0
+                )
+            )
+        ]
 
-        self.ff_rdport = self.feedforward.get_port()
-        self.ff_wrport = self.feedforward.get_port(write_capable=True)
+        self.init_counter()
 
-        self.specials += self.ff_rdport, self.ff_wrport
+        if self.is_clock:
+            self.dcycle = CSRStorage(bits_for(self.N_points - 1))
+            self.play_clock()
+        else:
+            # initialize buffer for feed forward
+            self.specials.feedforward = Memory(N_bits * 2, int(N_points / 2), name='feedforward')
 
-        # initialize buffer for recorded output
-        self.specials.recorded = Memory(N_bits, N_points, name='recorded')
-        self.rec_rdport = self.recorded.get_port()
-        self.rec_wrport = self.recorded.get_port(write_capable=True)
+            self.ff_rdport = self.feedforward.get_port()
+            self.ff_wrport = self.feedforward.get_port(write_capable=True)
 
-        self.specials += self.rec_rdport, self.rec_wrport
+            self.specials += self.ff_rdport, self.ff_wrport
 
-        self.read_input_data()
-        self.replay_data()
-        self.record_output()
-        self.readout_output()
+            # initialize buffer for recorded output
+            self.specials.recorded = Memory(N_bits, N_points, name='recorded')
+            self.rec_rdport = self.recorded.get_port()
+            self.rec_wrport = self.recorded.get_port(write_capable=True)
+
+            self.specials += self.rec_rdport, self.rec_wrport
+
+            self.read_input_data()
+            self.replay_data()
+            self.record_output()
+            self.readout_output()
+
+    def init_counter(self):
+        self.counter = Signal(bits_for(self.N_points - 1))
+
+        self.sync += [
+            If(self.enabled.storage & ((~self.reset_sequence) & 0b1),
+                self.counter.eq(
+                    self.counter + 1
+                ),
+            ).Else(
+                self.counter.eq(0)
+            )
+        ]
 
     def read_input_data(self):
-        # TODO: use the full width of the BUS
-        self.data_in = CSRStorage(self.N_bits)
-        self.data_addr = CSRStorage(bits_for(self.N_points - 1))
+        self.data_in = CSRStorage(self.N_bits * 2)
+        self.data_addr = CSRStorage(bits_for(int(self.N_points / 2) - 1))
         #self.data_write = CSRStorage(1)
 
         self.comb += [
@@ -49,32 +82,27 @@ class SequencePlayer(Module, AutoCSR):
             self.ff_wrport.dat_w.eq(self.data_in.storage),
         ]
 
-    def replay_data(self):
-        self.reset_sequence = Signal()
-        self.replay_counter = Signal(bits_for(self.N_points - 1))
-        self.value_internal = Signal((self.N_bits, True))
-        self.value = Signal((self.N_bits, True))
-        self.enabled = CSRStorage()
-
+    def play_clock(self):
         self.comb += [
-            self.ff_rdport.adr.eq(self.replay_counter),
-            self.value_internal.eq(self.ff_rdport.dat_r),
-            self.value.eq(
-                Mux(
-                    self.enabled.storage & ~self.reset_sequence,
-                    self.value_internal,
-                    0
+            If(self.counter < self.dcycle.storage,
+                self.value_internal.eq(
+                    (1 << self.N_bits) - 1
                 )
+            ).Else(
+                self.value_internal.eq(0)
             )
         ]
 
-        self.sync += [
-            If(self.enabled.storage,
-                self.replay_counter.eq(
-                    self.replay_counter + 1
-                ),
-            ).Else(
-                self.replay_counter.eq(0)
+    def replay_data(self):
+        # we save two 14-bit values per register
+        # -> we have to select the right one
+        shift = ((self.counter ^ 0b1) & 0b1) * self.N_bits
+        mask = ((1 << self.N_bits) - 1) << shift
+
+        self.comb += [
+            self.ff_rdport.adr.eq(self.counter >> 1),
+            self.value_internal.eq(
+                (self.ff_rdport.dat_r & mask) >> shift
             )
         ]
 
@@ -86,7 +114,7 @@ class SequencePlayer(Module, AutoCSR):
         self.comb += [
             # FIXME: OUTPUT SOLLTE ECHTER OUTPUT SEIN!!
             self.rec_wrport.we.eq(self.recording.storage),
-            self.rec_wrport.adr.eq(self.replay_counter),
+            self.rec_wrport.adr.eq(self.counter),
             self.rec_wrport.dat_w.eq(self.output),
         ]
 
@@ -95,14 +123,19 @@ class SequencePlayer(Module, AutoCSR):
         self.sync += [
             # FIXME: Length - 1
             If(self.recording.storage,
-                If(self.replay_counter == 0,
+                If(self.counter == 0,
                     self.end_counter.eq(self.end_counter + 1)
-                ),
-                If(self.end_counter == 2,
-                    self.recording.storage.eq(0)
                 )
             ).Else(
                 self.end_counter.eq(0)
+            )
+        ]
+
+        self.comb += [
+            If(self.recording.storage,
+                If(self.end_counter == 2,
+                    self.recording.storage.eq(0)
+                )
             )
         ]
 

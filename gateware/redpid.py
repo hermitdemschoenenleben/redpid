@@ -152,8 +152,12 @@ class Pid(Module):
         self.submodules.dna = DNA(version=2)
 
         s, c = 25, 18
-        self.submodules.fast_a = FastChain(14, s, c)
-        self.submodules.fast_b = FastChain(14, s, c)
+        self.submodules.fast_a = FastChain(False, 14, s, c)
+        self.submodules.fast_b = FastChain(True, 14, s, c)
+        # connect clock to GPIO
+        self.sync += [
+            self.gpio_n.o.eq(self.fast_b.sequence_player.value & 0b1)
+        ]
 
         self.comb += [
             self.fast_a.sequence_player.reset_sequence.eq(self.root.sync_sequences),
