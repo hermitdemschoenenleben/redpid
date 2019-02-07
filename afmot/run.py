@@ -52,8 +52,6 @@ if __name__ == '__main__':
     rp = Pitaya('rp-f012ba.local', user='root', password='zeilinger')
     rp.connect()
     rp.write_registers()
-    #rp.start_clock(.5)
-    #rp.set_feed_forward([0])
 
     """    from random import randint
     for channel in ('b',):
@@ -72,7 +70,16 @@ if __name__ == '__main__':
     asd"""
 
     length = 16381
-    rp.start_clock(length, .5)
+    """rp.set_feed_forward([
+        i - 8192 for i in range(16384)
+    ])"""
+    #rp.start_clock(length, .5)
+    rp.pitaya.set('fast_a_sequence_player_enabled', 0)
+    rp.pitaya.set('fast_b_sequence_player_enabled', 1)
+
+    from time import sleep
+    sleep(5)
+    rp.record_control()
     asd
     """ff = [0] * length
     rp.set_feed_forward(ff)

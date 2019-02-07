@@ -32,6 +32,7 @@ from .dna import DNA
 from .lfsr import XORSHIFTGen
 
 
+# FIXME: Remove completely?
 class ScopeGen(Module, AutoCSR):
     def __init__(self, width=25):
         self.gpio_trigger = Signal()
@@ -65,7 +66,7 @@ class ScopeGen(Module, AutoCSR):
         s = width - len(asg_a)
         self.comb += dac_a.eq(asg_a << s), dac_b.eq(asg_b << s)
 
-        self.specials.scope = Instance("red_pitaya_scope",
+        """self.specials.scope = Instance("red_pitaya_scope",
                 i_adc_a_i=adc_a >> s,
                 i_adc_b_i=adc_b >> s,
                 i_adc_clk_i=ClockSignal(),
@@ -84,7 +85,7 @@ class ScopeGen(Module, AutoCSR):
                 o_sys_rdata_o=self.scope_sys.rdata,
                 o_sys_err_o=self.scope_sys.err,
                 o_sys_ack_o=self.scope_sys.ack,
-        )
+        )"""
 
         """self.specials.asg = Instance("red_pitaya_asg",
                 o_dac_a_o=asg_a,

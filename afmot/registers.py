@@ -35,18 +35,18 @@ class Pitaya:
     def write_registers(self):
         new = dict(
             # channel A (PID channel)
-            fast_a_brk=0,
+            fast_a_brk=1,
             fast_a_mod_amp=0xeee,
             fast_a_mod_freq=0,
             fast_a_x_tap=0,
             fast_a_sweep_run=0,
-            fast_a_sweep_step=100000,
+            fast_a_sweep_step=300000,
             fast_a_y_tap=0,
-            fast_a_dy_sel=self.pitaya.signal("scopegen_dac_a"),
+            fast_a_dy_sel=self.pitaya.signal("zero"),#self.pitaya.signal("scopegen_dac_a"),
 
             # channel B (channel for rect output)
             fast_b_brk=1,
-            fast_b_dx_sel=self.pitaya.signal("zero"),
+            fast_b_dx_sel=self.pitaya.signal("zero"),#self.pitaya.signal("zero"),
             fast_b_x_tap=0,
             fast_b_y_tap=0,
             fast_b_sweep_run=0,
@@ -68,7 +68,8 @@ class Pitaya:
 
             # trigger on GPIO trigger
             scopegen_external_trigger=0,
-            scopegen_adc_b_sel=self.pitaya.signal("fast_b_x"),
+            scopegen_adc_a_sel=self.pitaya.signal("fast_a_y"),
+            scopegen_adc_b_sel=self.pitaya.signal("fast_b_y"),
 
             gpio_p_oes=0,
             gpio_n_oes=0,
@@ -112,12 +113,10 @@ class Pitaya:
             print(addr, value)
             self.pitaya.set('%s_data_addr' % channel, addr)
             self.pitaya.set('%s_data_in' % channel, value)
-            self.pitaya.set('%s_data_write' % channel, 1)
-            self.pitaya.set('%s_data_write' % channel, 0)
+            #self.pitaya.set('%s_data_write' % channel, 1)
+            #self.pitaya.set('%s_data_write' % channel, 0)
 
-        print('enable')
         self.pitaya.set('%s_enabled' % channel, 1)
-        print('enabled')
 
     def start_clock(self, length, percentage):
         data = []
@@ -126,7 +125,8 @@ class Pitaya:
             if i < percentage * length:
                 data.append(8191)
             else:
-                data.append(0)
+                # FIXME: not 0
+                data.append(1000)
 
         self._load_sequence('b', data)
 
@@ -139,11 +139,28 @@ class Pitaya:
 
     def record_control(self):
         # TODO: früher machen?
-        self.scpi.set_acquisition_trigger('EXT_PE', decimation=1, delay=8192)
+
+        self.scpi.set_acquisition_trigger(
+            'EXT_PE',
+            decimation=1,
+            delay=8192
+        )
+
+
         while not self.scpi.was_triggered():
             sleep(0.1)
 
-        control = rp.fast_in[XXX].get_buffer()
+        from matplotlib import pyplot as plt
+        a, b = (
+            self.scpi.fast_in[0].read_buffer(),
+            self.scpi.fast_in[1].read_buffer()
+        )
+        plt.plot(a)
+        plt.plot(b)
+
+        plt.show()
+        #print(control)
+        asd
 
         data = []
 
