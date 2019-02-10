@@ -54,6 +54,13 @@ class SequencePlayer(Module, AutoCSR):
 
             self.specials += self.rec_rdport, self.rec_wrport
 
+            # initialize buffer for recorded input
+            self.specials.recorded_error_signal = Memory(1, N_points, name='recorded_error_signal')
+            self.rec_error_signal_rdport = self.recorded_error_signal.get_port()
+            self.rec_error_signal_wrport = self.recorded_error_signal.get_port(write_capable=True)
+
+            self.specials += self.rec_error_signal_wrport, self.rec_error_signal_rdport
+
             self.read_input_data()
             self.replay_data()
             self.record_output()
@@ -111,6 +118,7 @@ class SequencePlayer(Module, AutoCSR):
     def record_output(self):
         # TODO: hier könnte man auch 2 Werte pro Register speichern
         # is connected by FastChain
+        self.input = Signal((1, True))
         self.output = Signal((self.N_bits, True))
 
         self.recording = CSRStorage()
@@ -118,7 +126,11 @@ class SequencePlayer(Module, AutoCSR):
         self.sync += [
             self.rec_wrport.we.eq(self.recording.storage),
             self.rec_wrport.adr.eq(self.counter),
-            self.rec_wrport.dat_w.eq(self.output)
+            self.rec_wrport.dat_w.eq(self.output),
+
+            self.rec_error_signal_wrport.we.eq(self.recording.storage),
+            self.rec_error_signal_wrport.adr.eq(self.counter),
+            self.rec_error_signal_wrport.dat_w.eq(self.input)
         ]
 
         self.end_counter = Signal(2)
@@ -145,7 +157,13 @@ class SequencePlayer(Module, AutoCSR):
         self.data_out = CSRStatus(self.N_bits)
         self.data_out_addr = CSRStorage(bits_for(self.N_points - 1))
 
+        self.error_signal_out = CSRStatus(1)
+        self.error_signal_out_addr = CSRStorage(bits_for(self.N_points - 1))
+
         self.sync += [
             self.rec_rdport.adr.eq(self.data_out_addr.storage),
             self.data_out.status.eq(self.rec_rdport.dat_r),
+
+            self.rec_error_signal_rdport.adr.eq(self.error_signal_out_addr.storage),
+            self.error_signal_out.status.eq(self.rec_error_signal_rdport.dat_r),
         ]

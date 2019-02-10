@@ -191,6 +191,11 @@ class FastChain(Module, AutoCSR):
 
         self.comb += [
             self.sequence_player.output.eq(self.y_limit.y),
+            If(self.iir_a.x > 0,
+                self.sequence_player.input.eq(1)
+            ).Else(
+                self.sequence_player.input.eq(0)
+            )
         ]
 
 class SlowChain(Module, AutoCSR):

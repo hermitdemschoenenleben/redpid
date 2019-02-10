@@ -15,7 +15,7 @@ class Pitaya:
         self._cached_data = {}
         self.parameters = {
             'decimation': 1,
-            'p': 1
+            'p': 0.05
         }
 
     def connect(self):
@@ -35,10 +35,10 @@ class Pitaya:
     def write_registers(self):
         new = dict(
             # channel A (PID channel)
-            fast_a_brk=1,
+            fast_a_brk=0,
             #fast_a_mod_amp=0x0,
             #fast_a_mod_freq=0,
-            fast_a_x_tap=0,
+            fast_a_x_tap=1,
             #fast_a_sweep_run=0,
             #fast_a_sweep_step=0,
             fast_a_y_tap=0,
@@ -166,6 +166,23 @@ class Pitaya:
 
         return data
 
+    def _read_error_signal(self, channel, N_points):
+        assert channel in ('a', 'b'), 'invalid channel'
+        channel = 'fast_%s_sequence_player' % channel
+
+        data = []
+
+        with self.pitaya.batch_reads:
+            for address in range(N_points):
+                self.pitaya.set('%s_error_signal_out_addr' % channel, address)
+                data.append(self.pitaya.get('%s_error_signal_out' % channel))
+
+        # convert batch read objects to integers
+        data = [int(_) for _ in data]
+        data = np.roll(data, -5)
+
+        return data
+
     def start_clock(self, length, dcycle):
         channel = 'fast_b_sequence_player'
         print('dcycle', int(length * dcycle))
@@ -186,6 +203,13 @@ class Pitaya:
 
         measured_control = self._read_sequence(channel, N_bits, N_points)
         return measured_control
+
+    def record_error_signal(self, channel='a', N_points=16384):
+        self.pitaya.set('fast_%s_sequence_player_recording' % channel, 1)
+        # just to be sure...
+        sleep(0.001)
+
+        return self._read_error_signal(channel, N_points)
 
     def sync(self):
         # just read something to wait for completion of all commands
