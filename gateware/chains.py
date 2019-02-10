@@ -23,7 +23,8 @@ from .limit import LimitCSR
 #from .sweep import SweepCSR
 #from .relock import Relock
 #from .modulate import Modulate, Demodulate
-from .sequence_player import SequencePlayer
+from .clock import ClockPlayer
+from .feed_forward import FeedForwardPlayer
 
 
 class ClockChain(Module, AutoCSR):
@@ -37,8 +38,8 @@ class ClockChain(Module, AutoCSR):
         self.signal_in = tuple()
         self.signal_out = tuple()
 
-        self.submodules.sequence_player = SequencePlayer(
-            True, N_bits=14, N_points=16384
+        self.submodules.sequence_player = ClockPlayer(
+            N_bits=14, N_points=16384
         )
 
         self.comb += [
@@ -110,8 +111,8 @@ class FastChain(Module, AutoCSR):
         #    width=width, step_width=24, step_shift=18)
         #self.submodules.mod = Modulate(width=width)
         self.submodules.y_limit = LimitCSR(width=width, guard=3)
-        self.submodules.sequence_player = SequencePlayer(
-            False, N_bits=14, N_points=16384
+        self.submodules.sequence_player = FeedForwardPlayer(
+            N_bits=14, N_points=16384
         )
 
         ###
@@ -190,11 +191,11 @@ class FastChain(Module, AutoCSR):
         ]
 
         self.comb += [
-            self.sequence_player.output.eq(self.y_limit.y),
+            self.sequence_player.control_signal.eq(self.y_limit.y),
             If(self.iir_a.x > 0,
-                self.sequence_player.input.eq(1)
+                self.sequence_player.error_signal.eq(1)
             ).Else(
-                self.sequence_player.input.eq(0)
+                self.sequence_player.error_signal.eq(0)
             )
         ]
 

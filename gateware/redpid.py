@@ -45,7 +45,7 @@ class Pid(Module):
     def __init__(self, platform):
         csr_map = {
                 "dna": 28, "xadc": 29, "gpio_n": 30, "gpio_p": 31,
-                "fast_a": 0, "fast_b": 1,
+                "control_loop": 0, "clock": 1,
                 #"slow_a": 2, "slow_b": 3, "slow_c": 4, "slow_d": 5,
                 #"scopegen": 6, "noise": 7,
                 'root': 8
@@ -76,13 +76,13 @@ class Pid(Module):
         self.submodules.dna = DNA(version=2)
 
         s, c = 25, 18
-        self.submodules.fast_a = FastChain(14, s, c)
-        self.submodules.fast_b = ClockChain(14, s, c)
+        self.submodules.control_loop = FastChain(14, s, c)
+        self.submodules.clock = ClockChain(14, s, c)
         #self.submodules.fast_b = FastChain(True, 14, s, c)
 
         self.comb += [
-            self.fast_a.sequence_player.reset_sequence.eq(self.root.sync_sequences),
-            self.fast_b.sequence_player.reset_sequence.eq(self.root.sync_sequences)
+            self.control_loop.sequence_player.reset_sequence.eq(self.root.sync_sequences),
+            self.clock.sequence_player.reset_sequence.eq(self.root.sync_sequences)
         ]
 
         sys_slow = ClockDomainsRenamer("sys_slow")
@@ -99,7 +99,7 @@ class Pid(Module):
         #self.submodules.noise = XORSHIFTGen(s)
 
         self.state_names, self.signal_names = cross_connect(self.gpio_n, [
-            ("fast_a", self.fast_a), ("fast_b", self.fast_b),
+            ("control_loop", self.control_loop), ("clock", self.clock),
             #("slow_a", self.slow_a), ("slow_b", self.slow_b),
             #("slow_c", self.slow_c), ("slow_d", self.slow_d),
             #("scopegen", self.scopegen), ("noise", self.noise),
@@ -111,10 +111,10 @@ class Pid(Module):
             #self.scopegen.sweep_trigger_a.eq(self.fast_a.sweep.sweep.trigger),
             #self.scopegen.sweep_trigger_b.eq(self.fast_b.sweep.sweep.trigger),
 
-            self.fast_a.adc.eq(self.analog.adc_a),
+            self.control_loop.adc.eq(self.analog.adc_a),
             #self.fast_b.adc.eq(self.analog.adc_b),
-            self.analog.dac_a.eq(self.fast_a.dac),
-            self.analog.dac_b.eq(self.fast_b.dac),
+            self.analog.dac_a.eq(self.control_loop.dac),
+            self.analog.dac_b.eq(self.clock.dac),
             # self.slow_a.adc.eq(self.xadc.adc[0] << 4),
             # self.ds0.data.eq(self.slow_a.dac),
             # self.slow_b.adc.eq(self.xadc.adc[1] << 4),
