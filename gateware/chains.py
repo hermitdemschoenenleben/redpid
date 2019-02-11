@@ -195,7 +195,7 @@ class FastChain(Module, AutoCSR):
             If(self.iir_a.x > 0,
                 self.sequence_player.error_signal.eq(1)
             ).Else(
-                self.sequence_player.error_signal.eq(0)
+                self.sequence_player.error_signal.eq(-1)
             )
         ]
 

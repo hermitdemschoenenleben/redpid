@@ -16,6 +16,9 @@ class SequencePlayer(Module, AutoCSR):
         self.N_bits = N_bits
         self.N_points = N_points
 
+        self.max_pos = (1<<(self.N_bits - 1)) - 1
+        self.max_neg = -1 * self.max_pos - 1
+
         self.enabled = CSRStorage()
         self.reset_sequence = Signal()
         self.value_internal = Signal((self.N_bits, True))
@@ -34,14 +37,15 @@ class SequencePlayer(Module, AutoCSR):
         self.run_counter()
 
     def run_counter(self):
-        self.counter = Signal(bits_for(self.N_points - 1))
+        self.leading_counter = Signal(bits_for(self.N_points - 1))
+        self.counter = Signal.like(self.leading_counter)
 
         self.sync += [
             If(self.enabled.storage & ((~self.reset_sequence) & 0b1),
-                self.counter.eq(
-                    self.counter + 1
-                ),
+                self.leading_counter.eq(self.leading_counter + 1),
+                self.counter.eq(self.leading_counter - 2)
             ).Else(
+                self.leading_counter.eq(0),
                 self.counter.eq(0)
             )
         ]
