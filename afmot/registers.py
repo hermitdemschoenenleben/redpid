@@ -34,55 +34,28 @@ class Pitaya:
 
     def write_registers(self):
         new = dict(
-            # channel A (PID channel)
-            fast_a_brk=0,
-            #fast_a_mod_amp=0x0,
-            #fast_a_mod_freq=0,
-            fast_a_x_tap=1,
-            #fast_a_sweep_run=0,
-            #fast_a_sweep_step=0,
-            fast_a_y_tap=0,
-            fast_a_dy_sel=self.pitaya.signal("zero"),
-            fast_a_y_limit_min=-8192,
-            fast_a_y_limit_max=8191,
-            fast_a_x_hold_en=self.pitaya.signal('zero'),
+            control_loop_brk=1,
+            control_loop_x_tap=1,
+            control_loop_y_tap=0,
+            control_loop_dy_sel=self.pitaya.signal("zero"),
+            control_loop_y_limit_min=-8192,
+            control_loop_y_limit_max=8191,
+            control_loop_x_hold_en=self.pitaya.signal('zero'),
 
-            # channel B (channel for rect output)
-            # fast_b_brk=1,
-            # fast_b_dx_sel=self.pitaya.signal("zero"),#self.pitaya.signal("zero"),
-            # fast_b_x_tap=0,
-            # fast_b_y_tap=0,
-            # fast_b_sweep_run=0,
-            # fast_b_sweep_step=100000,
-            # fast_b_dy_sel=self.pitaya.signal("zero"),
-            # fast_b_mod_freq=0,
-            # fast_b_mod_amp=0x0,
-
-            #fast_a_relock_run=0,
-            #fast_a_relock_en=self.pitaya.states(),
-            fast_a_y_hold_en=self.pitaya.states(),
-            fast_a_x_clear_en=self.pitaya.states('force'),
-            fast_a_y_clear_en=self.pitaya.states('force'),
-            fast_a_rx_sel=self.pitaya.signal('zero'),
-            # fast_b_relock_run=0,
-            # fast_b_relock_en=self.pitaya.states(),
-            # fast_b_y_hold_en=self.pitaya.states(),
-            # fast_b_y_clear_en=self.pitaya.states(),
-            # fast_b_rx_sel=self.pitaya.signal('zero'),
-
-            # trigger on GPIO trigger
-            #scopegen_external_trigger=0,
-            #scopegen_adc_a_sel=self.pitaya.signal("fast_a_y"),
-            #scopegen_adc_b_sel=self.pitaya.signal("fast_b_y"),
-            fast_b_sequence_player_clock_max=8191,
-
+            control_loop_y_hold_en=self.pitaya.states(),
+            control_loop_x_clear_en=self.pitaya.states('force'),
+            control_loop_y_clear_en=self.pitaya.states('force'),
+            control_loop_rx_sel=self.pitaya.signal('zero'),
 
             gpio_p_oes=0xff,
             gpio_p_outs=0x0,
             gpio_n_oes=0xff,
             gpio_n_outs=0b1,
 
-            gpio_n_do1_en=self.pitaya.states('fast_b_clock_high'),
+            gpio_n_do1_en=self.pitaya.states('control_loop_clock_0'),
+            gpio_n_do2_en=self.pitaya.states('control_loop_clock_1'),
+            gpio_n_do3_en=self.pitaya.states('control_loop_clock_2'),
+            gpio_n_do4_en=self.pitaya.states('control_loop_clock_3'),
             gpio_n_do0_en=self.pitaya.states()
         )
 
@@ -106,15 +79,14 @@ class Pitaya:
         #self.pitaya.set('fast_b_y_clear_en', self.pitaya.states('force'))
 
         # set PI parameters
-        self.pitaya.set_iir("fast_a_iir_a", *make_filter('P', k=self.parameters['p']))
+        self.pitaya.set_iir("control_loop_iir_a", *make_filter('P', k=self.parameters['p']))
 
         # re-enable lock
         #self.pitaya.set('fast_b_y_clear_en', self.pitaya.states())
         #self.pitaya.set('fast_b_x_clear_en', self.pitaya.states())
 
-    def _write_sequence(self, channel, data, N_bits):
-        assert channel in ('a', 'b'), 'invalid channel'
-        channel = 'fast_%s_sequence_player' % channel
+    def _write_sequence(self, data, N_bits):
+        channel = 'control_loop_sequence_player'
 
         max_ = 1<<(N_bits - 1)
         full = 2 * max_
@@ -132,14 +104,11 @@ class Pitaya:
 
             self.pitaya.set('%s_data_addr' % channel, addr)
             self.pitaya.set('%s_data_in' % channel, v1 + (v2 << N_bits))
-            #self.pitaya.set('%s_data_write' % channel, 1)
-            #self.pitaya.set('%s_data_write' % channel, 0)
 
         self.pitaya.set('%s_enabled' % channel, 1)
 
-    def _read_sequence(self, channel, N_bits, N_points):
-        assert channel in ('a', 'b'), 'invalid channel'
-        channel = 'fast_%s_sequence_player' % channel
+    def _read_sequence(self, N_bits, N_points):
+        channel = 'control_loop_sequence_player'
 
         data = []
 
@@ -166,9 +135,8 @@ class Pitaya:
 
         return data
 
-    def _read_error_signal(self, channel, N_points):
-        assert channel in ('a', 'b'), 'invalid channel'
-        channel = 'fast_%s_sequence_player' % channel
+    def _read_error_signal(self, N_points):
+        channel = 'control_loop_sequence_player'
 
         data = []
 
@@ -183,33 +151,34 @@ class Pitaya:
 
         return data
 
-    def start_clock(self, length, dcycle):
-        channel = 'fast_b_sequence_player'
-        print('dcycle', int(length * dcycle))
-        self.pitaya.set('%s_dcycle' % channel, int(length * dcycle))
+    def start_clock(self, length, end0, end1, end2):
+        channel = 'control_loop_sequence_player'
+        self.pitaya.set('%s_zone_end_1', int(length * end0))
+        self.pitaya.set('%s_zone_end_1', int(length * end0))
+        self.pitaya.set('%s_zone_end_1', int(length * end0))
         self.pitaya.set('%s_enabled' % channel, 1)
 
     def set_feed_forward(self, feedforward, N_bits):
-        self._write_sequence('a', feedforward, N_bits)
+        self._write_sequence(feedforward, N_bits)
 
     def set_proportional(self, p):
         self.parameters['p'] = p
         self.write_registers()
 
-    def record_control(self, channel='a', N_bits=14, N_points=16384):
-        self.pitaya.set('fast_%s_sequence_player_recording' % channel, 1)
+    def record_control(self, N_bits=14, N_points=16384):
+        self.pitaya.set('control_loop_sequence_player_recording', 1)
         # just to be sure...
         sleep(0.001)
 
-        measured_control = self._read_sequence(channel, N_bits, N_points)
+        measured_control = self._read_sequence(N_bits, N_points)
         return measured_control
 
-    def record_error_signal(self, channel='a', N_points=16384):
-        self.pitaya.set('fast_%s_sequence_player_recording' % channel, 1)
+    def record_error_signal(self, N_points=16384):
+        self.pitaya.set('control_loop_sequence_player_recording', 1)
         # just to be sure...
         sleep(0.001)
 
-        return self._read_error_signal(channel, N_points)
+        return self._read_error_signal(N_points)
 
     def sync(self):
         # just read something to wait for completion of all commands

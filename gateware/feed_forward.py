@@ -35,8 +35,9 @@ class FeedForwardPlayer(Module, AutoCSR):
         for N in range(N_zones - 1):
             # we make it 1 bit wider than needed in order to make it possible
             # to disable a zone (i.e. zone border > N_points)
-            storage = CSRStorage(1 + bits_for(N_points - 1))
-            setattr(self, 'zone_end_%d' % N, storage)
+            name = 'zone_end_%d' % N
+            storage = CSRStorage(1 + bits_for(N_points - 1), name=name)
+            setattr(self, name, storage)
             self.zone_ends.append(storage.storage)
 
         self.comb += [
@@ -248,6 +249,7 @@ class FeedForwardPlayer(Module, AutoCSR):
         self.sync += [
             #self.ff_wrport.we.eq(self.data_write.storage),
             If(~self.run_algorithm.storage,
+                # TODO: this should be set externally
                 self.ff_wrport.we.eq(1),
                 self.ff_wrport.adr.eq(self.data_addr.storage),
                 self.ff_wrport.dat_w.eq(self.data_in.storage),
