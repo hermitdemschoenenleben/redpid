@@ -1,7 +1,8 @@
 import pickle
 from matplotlib import pyplot as plt
 
-with open('log.pickle', 'rb') as f:
+with open('log-continuous.pickle', 'rb') as f:
+#with open('log.pickle', 'rb') as f:
     data = pickle.load(f)
 
 for d in data:
@@ -11,7 +12,8 @@ for d in data:
     es = d['error_signal']
     frequencies = d['frequencies']
 
-    if N in (70,100,140,170, 230, 260):
+    #if N in (10,80,180, 350, 500, 580):
+    if N in (10, 20, 40):
         #plt.plot(ff, label='feed forward')
         #plt.plot(es, label='error signal')
         plt.plot(frequencies, label='frequencies')

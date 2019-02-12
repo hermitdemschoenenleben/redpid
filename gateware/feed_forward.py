@@ -1,7 +1,7 @@
 from migen import Module, Signal, If, bits_for, Array, Memory, ClockDomainsRenamer, Mux
 from misoc.interconnect.csr import CSRStorage, AutoCSR, CSRStatus
 from migen.genlib.cdc import MultiReg, GrayCounter
-from .sequence_player import SequencePlayer
+from .clock import ClockPlayer
 
 
 STATUS_REPLAY = 0
@@ -9,9 +9,62 @@ STATUS_REPLAY_RECORD_COUNT = 1
 STATUS_REPLAY_ADJUST = 2
 
 
-class FeedForwardPlayer(SequencePlayer):
-    def __init__(self, N_bits=14, N_points=16384):
-        super().__init__(N_bits=N_bits, N_points=N_points)
+class FeedForwardPlayer(Module, AutoCSR):
+    def __init__(self, N_bits=14, N_points=16384, N_zones=4):
+        allowed_N_points = [
+            1 << shift
+            for shift in range(16)
+            if shift > 0
+        ]
+        assert N_points in allowed_N_points, \
+            'invalid N_points, allowed: %s' % allowed_N_points
+
+        self.N_bits = N_bits
+        self.N_points = N_points
+        self.N_zones = N_zones
+
+        self.max_pos = (1<<(self.N_bits - 1)) - 1
+        self.max_neg = -1 * self.max_pos - 1
+
+        self.enabled = CSRStorage()
+        self.reset_sequence = Signal()
+        self.value_internal = Signal((self.N_bits, True))
+        self.value = Signal.like(self.value_internal)
+
+        self.zone_ends = []
+        for N in range(N_zones - 1):
+            # we make it 1 bit wider than needed in order to make it possible
+            # to disable a zone (i.e. zone border > N_points)
+            storage = CSRStorage(1 + bits_for(N_points - 1))
+            setattr(self, 'zone_end_%d' % N, storage)
+            self.zone_ends.append(storage.storage)
+
+        self.comb += [
+            self.value.eq(
+                Mux(
+                    self.enabled.storage & ((~self.reset_sequence) & 0b1),
+                    self.value_internal,
+                    0
+                )
+            )
+        ]
+
+        self.submodules.clock = ClockPlayer(self, N_points=N_points, N_zones=N_zones)
+
+        self.counter = Signal.like(self.clock.counter)
+        self.leading_counter = Signal.like(self.clock.leading_counter)
+        self.comb += [
+            self.clock.enabled.eq(self.enabled.storage),
+            self.clock.reset_sequence.eq(self.reset_sequence),
+
+            self.counter.eq(self.clock.counter),
+            self.leading_counter.eq(self.clock.leading_counter),
+
+            *[
+                self.clock.zone_ends[i].eq(self.zone_ends[i])
+                for i in range(self.N_zones - 1)
+            ]
+        ]
 
         self.init_memories()
 
@@ -20,6 +73,7 @@ class FeedForwardPlayer(SequencePlayer):
         self.record_output()
         self.adjust_feedforward()
 
+        # communication with CPU via the bus
         self.bus_to_feedforward()
         self.feedforward_to_bus()
 
@@ -79,6 +133,8 @@ class FeedForwardPlayer(SequencePlayer):
     def adjust_feedforward(self):
         current_error_signal = Signal((2, True))
 
+        current_error_signal_counter = self.error_signal_counters[self.clock.current_zone]
+
         self.sync += [
             # read error signal from memory
             If(self.run_algorithm.storage,
@@ -91,7 +147,7 @@ class FeedForwardPlayer(SequencePlayer):
                 If(self.status == STATUS_REPLAY_ADJUST,
                     # write adjusted feed forward
                     self.ff_wrport.adr.eq(self.counter),
-                    If (self.error_signal_counter > 0,
+                    If (current_error_signal_counter > 0,
                         self.ff_wrport.dat_w.eq(
                             Mux(self.value_internal < self.max_pos,
                                 self.value_internal + 1,
@@ -108,8 +164,8 @@ class FeedForwardPlayer(SequencePlayer):
                     ),
 
                     # subtract current error signal value from error signal counter
-                    self.error_signal_counter.eq(
-                        self.error_signal_counter - current_error_signal
+                    current_error_signal_counter.eq(
+                        current_error_signal_counter - current_error_signal
                     )
                 )
             )
@@ -126,16 +182,23 @@ class FeedForwardPlayer(SequencePlayer):
 
         # we are going to save the summed error signal over one cycle in this
         # signal
-        self.error_signal_counter = Signal((bits_for(self.N_points * 3), True))
+        self.error_signal_counters = Array([
+            Signal((bits_for(self.N_points * 3), True), name='error_signal_counter_%d' % N)
+            for N in range(self.N_zones)
+        ])
 
         # is recording enabled?
         self.recording = CSRStorage()
 
+        current_error_signal_counter = self.error_signal_counters[self.clock.current_zone]
+
         self.sync += [
+            # record control signal
             self.rec_wrport.we.eq(self.recording.storage),
             self.rec_wrport.adr.eq(self.counter),
             self.rec_wrport.dat_w.eq(self.control_signal),
 
+            # record error signal
             self.rec_error_signal_wrport.we.eq(
                 self.recording.storage | (self.status == STATUS_REPLAY_RECORD_COUNT)
             ),
@@ -143,11 +206,16 @@ class FeedForwardPlayer(SequencePlayer):
             self.rec_error_signal_wrport.dat_w.eq(self.error_signal),
 
             If(self.status == STATUS_REPLAY_RECORD_COUNT,
-                self.error_signal_counter.eq(
-                    self.error_signal_counter + self.error_signal
+               # update the sum over the error signal
+                current_error_signal_counter.eq(
+                    current_error_signal_counter + self.error_signal
                 )
             ).Elif(self.status == STATUS_REPLAY,
-                self.error_signal_counter.eq(0)
+                # reset all error signal counters
+                *[
+                    es_counter.eq(0)
+                    for es_counter in self.error_signal_counters
+                ]
             )
         ]
 

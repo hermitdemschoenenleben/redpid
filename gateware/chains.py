@@ -27,34 +27,8 @@ from .clock import ClockPlayer
 from .feed_forward import FeedForwardPlayer
 
 
-class ClockChain(Module, AutoCSR):
-    def __init__(self, width=14, signal_width=25, coeff_width=18):
-        self.dac = Signal((width, True))
-
-        clock_high = Signal()
-
-        self.state_in = tuple()
-        self.state_out = [clock_high]
-        self.signal_in = tuple()
-        self.signal_out = tuple()
-
-        self.submodules.sequence_player = ClockPlayer(
-            N_bits=14, N_points=16384
-        )
-
-        self.comb += [
-            clock_high.eq(self.sequence_player.value & 0b1)
-        ]
-
-        self.comb += [
-            self.dac.eq(
-                self.sequence_player.value
-            )
-        ]
-
-
 class FastChain(Module, AutoCSR):
-    def __init__(self, width=14, signal_width=25, coeff_width=18):
+    def __init__(self, width=14, signal_width=25, coeff_width=18, N_zones=4):
         self.adc = Signal((width, True))
         self.dac = Signal((width, True))
 
@@ -74,8 +48,16 @@ class FastChain(Module, AutoCSR):
         #unlocked = Signal()
         #sweep_trigger = Signal()
 
+        clocks = []
+        for N in range(N_zones):
+            name = 'clock_%d' % N
+            signal = Signal(name=name)
+            clocks.append(signal)
+            setattr(self, name, signal)
+
+
         self.state_in = x_hold, x_clear, y_hold, y_clear#, relock
-        self.state_out = x_sat, x_railed, y_sat, y_railed#, unlocked
+        self.state_out = x_sat, x_railed, y_sat, y_railed, *clocks#, unlocked
 
         x = Signal((signal_width, True))
         dx = Signal((signal_width, True))
@@ -112,7 +94,7 @@ class FastChain(Module, AutoCSR):
         #self.submodules.mod = Modulate(width=width)
         self.submodules.y_limit = LimitCSR(width=width, guard=3)
         self.submodules.sequence_player = FeedForwardPlayer(
-            N_bits=14, N_points=16384
+            N_bits=14, N_points=16384, N_zones=N_zones
         )
 
         ###

@@ -24,7 +24,7 @@ from misoc.interconnect.csr import AutoCSR, CSRStatus, CSRStorage
 from .pitaya_ps import SysCDC, Sys2CSR, SysInterconnect, PitayaPS, sys_layout
 from .crg import CRG
 from .analog import PitayaAnalog
-from .chains import FastChain, SlowChain, cross_connect, ClockChain
+from .chains import FastChain, SlowChain, cross_connect
 from .gpio import Gpio
 from .xadc import XADC
 from .delta_sigma import DeltaSigma
@@ -45,7 +45,7 @@ class Pid(Module):
     def __init__(self, platform):
         csr_map = {
                 "dna": 28, "xadc": 29, "gpio_n": 30, "gpio_p": 31,
-                "control_loop": 0, "clock": 1,
+                "control_loop": 0,
                 #"slow_a": 2, "slow_b": 3, "slow_c": 4, "slow_d": 5,
                 #"scopegen": 6, "noise": 7,
                 'root': 8
@@ -77,12 +77,10 @@ class Pid(Module):
 
         s, c = 25, 18
         self.submodules.control_loop = FastChain(14, s, c)
-        self.submodules.clock = ClockChain(14, s, c)
         #self.submodules.fast_b = FastChain(True, 14, s, c)
 
         self.comb += [
             self.control_loop.sequence_player.reset_sequence.eq(self.root.sync_sequences),
-            self.clock.sequence_player.reset_sequence.eq(self.root.sync_sequences)
         ]
 
         sys_slow = ClockDomainsRenamer("sys_slow")
@@ -99,7 +97,7 @@ class Pid(Module):
         #self.submodules.noise = XORSHIFTGen(s)
 
         self.state_names, self.signal_names = cross_connect(self.gpio_n, [
-            ("control_loop", self.control_loop), ("clock", self.clock),
+            ("control_loop", self.control_loop),
             #("slow_a", self.slow_a), ("slow_b", self.slow_b),
             #("slow_c", self.slow_c), ("slow_d", self.slow_d),
             #("scopegen", self.scopegen), ("noise", self.noise),
@@ -114,7 +112,6 @@ class Pid(Module):
             self.control_loop.adc.eq(self.analog.adc_a),
             #self.fast_b.adc.eq(self.analog.adc_b),
             self.analog.dac_a.eq(self.control_loop.dac),
-            self.analog.dac_b.eq(self.clock.dac),
             # self.slow_a.adc.eq(self.xadc.adc[0] << 4),
             # self.ds0.data.eq(self.slow_a.dac),
             # self.slow_b.adc.eq(self.xadc.adc[1] << 4),

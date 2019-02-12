@@ -16,16 +16,17 @@ def convert_number(n, N_bits):
 
 
 class Laser:
-    def __init__(self, N_points):
+    def __init__(self, N_points, targets, zone_ends, delay):
         self.N_points = N_points
+        self.targets = targets
+        self.zone_ends = zone_ends
+        self.delay = delay
         self.reset()
 
     def reset(self):
         self.current = 0
         self.frequency = 0
-        delay = 10
-        self.queue = [0] * 10
-        self.target = (30, -30)
+        self.queue = [0] * self.delay
 
     def set_current(self, current):
         self.queue.append(current)
@@ -36,31 +37,45 @@ class Laser:
         self.frequency += diff / 1000
 
     def get_error_signal(self, counter):
+        target = None
+        for zone, end in enumerate(self.zone_ends):
+            if counter < end:
+                target = self.targets[zone]
+                break
+
+        if target is None:
+            target = self.targets[0]
+
         noise = randint(0, 5) - 2
-        target = self.target[0 if counter < 0.5 * self.N_points else 1]
+
         return 1 if (self.frequency + noise) < target else -1
 
 
 def write_log(log):
-    with open('log.pickle', 'wb') as f:
+    with open('log-continuous.pickle', 'wb') as f:
         pickle.dump(log, f)
 
 
 def testbench(player: FeedForwardPlayer, N_bits: int, N_points: int):
-    l = Laser(N_points)
+    zone_ends = (511, N_points+1, N_points+1)
+    l = Laser(N_points, (100, -100), zone_ends, 10)
 
     log_data = []
 
     yield from player.enabled.write(1)
     yield from player.run_algorithm.write(1)
+    yield player.status.eq(3)
+    yield from player.zone_end_0.write(zone_ends[0])
+    yield from player.zone_end_1.write(zone_ends[1])
+    yield from player.zone_end_2.write(zone_ends[2])
 
     N_runs = 0
     while True:
         status = yield player.status
         counter = yield player.counter
 
-        if counter == 0:
-            l.reset()
+        """if counter == 0:
+            l.reset()"""
 
         current = yield player.value
         l.set_current(current)
@@ -97,7 +112,7 @@ def testbench(player: FeedForwardPlayer, N_bits: int, N_points: int):
                 })
                 write_log(log_data)
 
-            if N_runs == 2000:
+            if N_runs == 3000:
                 break
                 """ff = []
                 es = []
@@ -118,7 +133,7 @@ def testbench(player: FeedForwardPlayer, N_bits: int, N_points: int):
 
 
 
-N_bits = 12
-N_points = 2048
+N_bits = 9
+N_points = 1024
 player = FeedForwardPlayer(N_bits, N_points)
 run_simulation(player, testbench(player, N_bits, N_points))#, vcd_name="laser_control.vcd")
