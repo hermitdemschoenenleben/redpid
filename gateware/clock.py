@@ -39,9 +39,11 @@ class ClockPlayer(Module):
     def play_clock(self):
         self.current_zone = Signal(bits_for(self.N_zones))
 
-        current_zone_end = Array(self.zone_ends)[self.current_zone]
+        self.current_zone_end = Array(
+            self.zone_ends + [Signal(14, reset=self.N_points - 1)]
+        )[self.current_zone]
 
-        counter_is_at_zone_end = self.counter == current_zone_end
+        counter_is_at_zone_end = self.counter == self.current_zone_end
         counter_is_at_last_point = self.counter == self.N_points - 1
 
         self.sync += [

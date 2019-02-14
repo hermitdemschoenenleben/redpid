@@ -1,4 +1,5 @@
 import pickle
+import numpy as np
 from migen import *
 from migen.fhdl import verilog
 from migen.sim import Simulator
@@ -44,24 +45,31 @@ class Laser:
                 break
 
         if target is None:
-            target = self.targets[0]
+            target = self.targets[-1]
 
-        noise = randint(0, 5) - 2
+        # noise = randint(0, 5) - 2
+        noise = np.random.normal(scale=2.0)
 
         return 1 if (self.frequency + noise) < target else -1
 
 
 def write_log(log):
-    with open('log-continuous.pickle', 'wb') as f:
+    with open('log-test2.pickle', 'wb') as f:
         pickle.dump(log, f)
 
 
 def testbench(player: FeedForwardPlayer, N_bits: int, N_points: int):
-    zone_ends = (511, N_points+1, N_points+1)
-    l = Laser(N_points, (100, -100), zone_ends, 10)
+    zone_ends = (int((N_points / 4) - 1), int((N_points / 2) - 1), int((3 * N_points / 4) - 1))
+    delay = int(N_points/160)
+    #l = Laser(N_points, (2500, 2400, -200, -600), zone_ends, delay)
+    l = Laser(N_points, (500, 400, -200, -600), zone_ends, delay)
 
     log_data = []
 
+    print('delay', delay)
+    yield from player.keep_constant_at_end.write(delay)
+    yield from player.step_size.write(16)
+    yield from player.decrease_step_size_after.write(1500)
     yield from player.enabled.write(1)
     yield from player.run_algorithm.write(1)
     yield player.status.eq(3)
@@ -95,7 +103,10 @@ def testbench(player: FeedForwardPlayer, N_bits: int, N_points: int):
             N_runs += 1
             print('RUN', N_runs)
 
-            if N_runs % 10 == 0:
+            if N_runs % 100 == 0:
+            #if True:
+                step_size = yield player.actual_step_size
+                print('step size', step_size)
                 ff = []
                 es = []
                 for point in range(N_points):
@@ -112,7 +123,7 @@ def testbench(player: FeedForwardPlayer, N_bits: int, N_points: int):
                 })
                 write_log(log_data)
 
-            if N_runs == 3000:
+            if N_runs == 50000:
                 break
                 """ff = []
                 es = []
@@ -133,7 +144,8 @@ def testbench(player: FeedForwardPlayer, N_bits: int, N_points: int):
 
 
 
-N_bits = 9
+N_bits = 14
+#N_points =16384
 N_points = 1024
 player = FeedForwardPlayer(N_bits, N_points)
 run_simulation(player, testbench(player, N_bits, N_points))#, vcd_name="laser_control.vcd")

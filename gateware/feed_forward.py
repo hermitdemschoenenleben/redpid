@@ -136,7 +136,17 @@ class FeedForwardPlayer(Module, AutoCSR):
 
         current_error_signal_counter = self.error_signal_counters[self.clock.current_zone]
 
+        self.step_size = CSRStorage(14, reset=1, write_from_dev=True)
+        self.decrease_step_size_after = CSRStorage(16)
+        self.adjustment_counter = Signal(16)
+        self.keep_constant_at_end = CSRStorage(14)
+        constant_signal = Signal(14)
+
+        step_size_shift = Signal(6)
+        self.actual_step_size = Signal(14)
+
         self.sync += [
+            self.actual_step_size.eq(self.step_size.storage >> step_size_shift),
             # read error signal from memory
             If(self.run_algorithm.storage,
                 self.rec_error_signal_rdport.adr.eq(self.leading_counter),
@@ -146,27 +156,44 @@ class FeedForwardPlayer(Module, AutoCSR):
             If(self.run_algorithm.storage,
                 self.ff_wrport.we.eq(self.status == STATUS_REPLAY_ADJUST),
                 If(self.status == STATUS_REPLAY_ADJUST,
+                    If(self.counter == self.N_points - 1,
+                        self.adjustment_counter.eq(self.adjustment_counter + 1),
+                        If(self.adjustment_counter == self.decrease_step_size_after.storage,
+                            self.adjustment_counter.eq(0),
+                            If(self.actual_step_size > 1,
+                                step_size_shift.eq(step_size_shift + 1)
+                            )
+                        )
+                    ),
                     # write adjusted feed forward
                     self.ff_wrport.adr.eq(self.counter),
-                    If (current_error_signal_counter > 0,
-                        self.ff_wrport.dat_w.eq(
-                            Mux(self.value_internal < self.max_pos,
-                                self.value_internal + 1,
-                                self.value_internal
+                    If(self.counter <= self.clock.current_zone_end - self.keep_constant_at_end.storage,
+                        If (current_error_signal_counter > 0,
+                            self.ff_wrport.dat_w.eq(
+                                Mux(self.value_internal + self.actual_step_size <= self.max_pos,
+                                    self.value_internal + self.actual_step_size,
+                                    self.value_internal
+                                )
                             )
-                        )
+                        ).Else(
+                            self.ff_wrport.dat_w.eq(
+                                Mux(self.value_internal - self.actual_step_size >= self.max_neg,
+                                    self.value_internal - self.actual_step_size,
+                                    self.value_internal
+                                )
+                            )
+                        ),
                     ).Else(
-                        self.ff_wrport.dat_w.eq(
-                            Mux(self.value_internal > self.max_neg,
-                                self.value_internal - 1,
-                                self.value_internal
-                            )
-                        )
+                        self.ff_wrport.dat_w.eq(constant_signal)
                     ),
 
                     # subtract current error signal value from error signal counter
                     current_error_signal_counter.eq(
                         current_error_signal_counter - current_error_signal
+                    ),
+
+                    If(self.counter == self.clock.current_zone_end - self.keep_constant_at_end.storage,
+                        constant_signal.eq(self.ff_wrport.dat_w)
                     )
                 )
             )
