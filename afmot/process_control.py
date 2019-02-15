@@ -5,7 +5,7 @@ from time import sleep
 from matplotlib import pyplot as plt
 from scipy.signal import savgol_filter
 
-from utils import do, get_shifted, REPLAY_SHIFT, LENGTH
+from utils import do, LENGTH
 
 
 def load_data(filename):

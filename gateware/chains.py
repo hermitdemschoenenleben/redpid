@@ -30,6 +30,7 @@ from .feed_forward import FeedForwardPlayer
 class FastChain(Module, AutoCSR):
     def __init__(self, width=14, signal_width=25, coeff_width=18, N_zones=4):
         self.adc = Signal((width, True))
+        self.other_adc = Signal((width, True))
         self.dac = Signal((width, True))
 
         self.x_tap = CSRStorage(2)
@@ -60,13 +61,14 @@ class FastChain(Module, AutoCSR):
         self.state_out = x_sat, x_railed, y_sat, y_railed, *clocks#, unlocked
 
         x = Signal((signal_width, True))
+        other_x = Signal((signal_width, True))
         dx = Signal((signal_width, True))
         y = Signal((signal_width, True))
         dy = Signal((signal_width, True))
         rx = Signal((signal_width, True))
 
         self.signal_in = dx, dy, rx
-        self.signal_out = x, y#, sweep_trigger
+        self.signal_out = x, y, other_x#, sweep_trigger
 
         ###
 
@@ -103,6 +105,7 @@ class FastChain(Module, AutoCSR):
         s1 = 2*coeff_width - width
         s2 = 2*coeff_width - signal_width
         self.comb += [
+            other_x.eq(self.other_adc),
             self.iir_a.x.eq(self.adc << s),
             self.iir_a.hold.eq(x_hold),
             self.iir_a.clear.eq(x_clear),
@@ -160,6 +163,7 @@ class FastChain(Module, AutoCSR):
         self.sync += ya.eq(
             (
                 #self.mod.y + (dy >> s) +
+                dy +
                 self.sequence_player.value
             )
             #+ (self.sweep.y + self.relock.y)
@@ -180,6 +184,13 @@ class FastChain(Module, AutoCSR):
                 self.sequence_player.error_signal.eq(-1)
             )
         ]
+
+        for N, clock in enumerate(clocks):
+            self.comb += [
+                clock.eq(
+                    self.sequence_player.clock.current_zone == N
+                )
+            ]
 
 class SlowChain(Module, AutoCSR):
     def __init__(self, width=16, signal_width=25, coeff_width=18):

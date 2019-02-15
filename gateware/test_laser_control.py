@@ -35,7 +35,7 @@ class Laser:
     def next_tick(self):
         self.current = self.queue.pop(0)
         diff = self.current - self.frequency
-        self.frequency += diff / 1000
+        self.frequency += diff / 100
 
     def get_error_signal(self, counter):
         target = None
@@ -59,23 +59,27 @@ def write_log(log):
 
 
 def testbench(player: FeedForwardPlayer, N_bits: int, N_points: int):
-    zone_ends = (int((N_points / 4) - 1), int((N_points / 2) - 1), int((3 * N_points / 4) - 1))
+    #zone_ends = (int((N_points / 4) - 1), int((N_points / 2) - 1), int((3 * N_points / 4) - 1))
+    zone_ends = (int((N_points / 2) - 1), N_points + 1, N_points + 1)
     delay = int(N_points/160)
     #l = Laser(N_points, (2500, 2400, -200, -600), zone_ends, delay)
-    l = Laser(N_points, (500, 400, -200, -600), zone_ends, delay)
+    #l = Laser(N_points, (500, -500, -200, -600), zone_ends, delay)
+    l = Laser(N_points, (30, -30, -200, -600), zone_ends, delay)
 
     log_data = []
 
     print('delay', delay)
-    yield from player.keep_constant_at_end.write(delay)
-    yield from player.step_size.write(16)
-    yield from player.decrease_step_size_after.write(1500)
+    yield from player.keep_constant_at_end.write(0)
+    yield from player.step_size.write(4)
+    yield from player.decrease_step_size_after.write(25)
     yield from player.enabled.write(1)
     yield from player.run_algorithm.write(1)
     yield player.status.eq(3)
     yield from player.zone_end_0.write(zone_ends[0])
     yield from player.zone_end_1.write(zone_ends[1])
     yield from player.zone_end_2.write(zone_ends[2])
+    yield from player.tuning_direction_0.write(1)
+    yield from player.tuning_direction_1.write(-1)
 
     N_runs = 0
     while True:
@@ -103,7 +107,7 @@ def testbench(player: FeedForwardPlayer, N_bits: int, N_points: int):
             N_runs += 1
             print('RUN', N_runs)
 
-            if N_runs % 100 == 0:
+            if N_runs % 10 == 0:
             #if True:
                 step_size = yield player.actual_step_size
                 print('step size', step_size)

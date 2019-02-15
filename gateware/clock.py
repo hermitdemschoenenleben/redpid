@@ -17,6 +17,14 @@ class ClockPlayer(Module):
             Signal(1 + bits_for(N_points - 1))
             for N in range(N_zones - 1)
         ]
+        self.request_stop = Signal()
+        self.stop_zone = Signal(bits_for(N_zones))
+        self.stopped = Signal()
+
+        self.current_zone = Signal(bits_for(self.N_zones))
+        self.current_zone_end = Array(
+            self.zone_ends + [Signal(14, reset=self.N_points - 1)]
+        )[self.current_zone]
 
         self.run_counter()
         self.play_clock()
@@ -26,23 +34,21 @@ class ClockPlayer(Module):
         self.counter = Signal.like(self.leading_counter)
 
         self.sync += [
-            If(self.enabled & ((~self.reset_sequence) & 0b1),
-                self.leading_counter.eq(self.leading_counter + 1),
-                self.counter.eq(self.leading_counter - 2)
-            ).Else(
-                self.leading_counter.eq(0),
-                self.counter.eq(0)
+            If(self.request_stop & (self.current_zone == self.stop_zone) & (self.counter == self.current_zone_end - 3),
+                self.stopped.eq(1)
+            ),
+            If(((~self.stopped) & 0b1),
+                If(self.enabled & ((~self.reset_sequence) & 0b1),
+                    self.leading_counter.eq(self.leading_counter + 1),
+                    self.counter.eq(self.leading_counter - 2)
+                ).Else(
+                    self.leading_counter.eq(0),
+                    self.counter.eq(0)
+                )
             )
         ]
 
-
     def play_clock(self):
-        self.current_zone = Signal(bits_for(self.N_zones))
-
-        self.current_zone_end = Array(
-            self.zone_ends + [Signal(14, reset=self.N_points - 1)]
-        )[self.current_zone]
-
         counter_is_at_zone_end = self.counter == self.current_zone_end
         counter_is_at_last_point = self.counter == self.N_points - 1
 

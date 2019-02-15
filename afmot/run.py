@@ -42,22 +42,50 @@ if __name__ == '__main__':
     rp.connect()
     rp.write_registers()
 
-    rp.pitaya.set('fast_a_sequence_player_enabled', 0)
+    datas = []
 
-    first_feed_forward = np.array([0] * LENGTH)
-    rp.set_feed_forward(first_feed_forward, N_BITS)
-    rp.sync()
+    #rp.pitaya.set('control_loop_brk', 0)
+    #rp.parameters['p'] = .01
+    #rp.write_registers()
+    #asd
 
-    rp.start_clock(LENGTH, .5)
+    #for wait in (2, 2.5, 3, 3.5, 4, 4.5, 5):
+    for wait in (3.5, 4.5, 5.5, 6.5):
+        print('wait', wait)
 
-    rp.pitaya.set('fast_a_sequence_player_enabled', 1)
-    rp.pitaya.set('fast_b_sequence_player_enabled', 1)
+        rp.pitaya.set('control_loop_sequence_player_run_algorithm', 0)
+        rp.pitaya.set('control_loop_sequence_player_enabled', 0)
 
-    rp.pitaya.set('root_sync_sequences_en', 1)
-    rp.pitaya.set('root_sync_sequences_en', 0)
+        first_feed_forward = np.array([0] * LENGTH)
+        #rp.set_feed_forward(first_feed_forward, N_BITS)
+
+        rp.sync()
+
+        rp.start_clock(LENGTH, .5, 1, None)
+        print('remove')
+        rp.pitaya.set('control_loop_dy_sel', rp.pitaya.signal('zero'))
+        #asd
+
+        rp.pitaya.set('control_loop_sequence_player_max_status', 50)
+
+        rp.pitaya.set('control_loop_sequence_player_enabled', 1)
+        rp.pitaya.set('control_loop_sequence_player_keep_constant_at_end', 0)
+        rp.pitaya.set('control_loop_sequence_player_run_algorithm', 1)
+        sleep(100)
+
+        #rp.pitaya.set('root_sync_sequences_en', 1)
+        #rp.pitaya.set('root_sync_sequences_en', 0)
+        sleep(wait)
+        d = rp.record_control()
+        datas.append(d)
+        plt.plot(d, label=wait)
+
+    plt.legend()
+    plt.show()
 
     datas = []
     raw_control_datas = []
+    endAlgorithm()
 
     for i in range(11):
         if i in PROPORTIONAL:

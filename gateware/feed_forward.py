@@ -7,6 +7,7 @@ from .clock import ClockPlayer
 STATUS_REPLAY = 0
 STATUS_REPLAY_RECORD_COUNT = 1
 STATUS_REPLAY_ADJUST = 2
+STATUS_REPLAY_FILTER_DIRECTION = 3
 
 
 class FeedForwardPlayer(Module, AutoCSR):
@@ -30,6 +31,12 @@ class FeedForwardPlayer(Module, AutoCSR):
         self.reset_sequence = Signal()
         self.value_internal = Signal((self.N_bits, True))
         self.value = Signal.like(self.value_internal)
+        self.request_stop = CSRStorage()
+        self.stop_zone = CSRStorage(bits_for(N_zones))
+
+        self.run_algorithm = CSRStorage()
+        self.status = Signal(10)
+        self.max_status = CSRStorage(10, reset=3)
 
         self.zone_ends = []
         for N in range(N_zones - 1):
@@ -39,6 +46,13 @@ class FeedForwardPlayer(Module, AutoCSR):
             storage = CSRStorage(1 + bits_for(N_points - 1), name=name)
             setattr(self, name, storage)
             self.zone_ends.append(storage.storage)
+
+        self.tuning_directions = []
+        for N in range(N_zones):
+            name = 'tuning_direction_%d' % N
+            storage = CSRStorage(2, name=name)
+            setattr(self, name, storage)
+            self.tuning_directions.append(storage.storage)
 
         self.comb += [
             self.value.eq(
@@ -57,6 +71,8 @@ class FeedForwardPlayer(Module, AutoCSR):
         self.comb += [
             self.clock.enabled.eq(self.enabled.storage),
             self.clock.reset_sequence.eq(self.reset_sequence),
+            self.clock.request_stop.eq(self.request_stop.storage & (self.status == STATUS_REPLAY)),
+            self.clock.stop_zone.eq(self.stop_zone.storage),
 
             self.counter.eq(self.clock.counter),
             self.leading_counter.eq(self.clock.leading_counter),
@@ -73,6 +89,7 @@ class FeedForwardPlayer(Module, AutoCSR):
         self.replay_feedforward()
         self.record_output()
         self.adjust_feedforward()
+        self.filter_direction()
 
         # communication with CPU via the bus
         self.bus_to_feedforward()
@@ -112,13 +129,14 @@ class FeedForwardPlayer(Module, AutoCSR):
 
     def update_status(self):
         """Updates the status of the state machine when one cycle is completed."""
-        self.run_algorithm = CSRStorage()
-        self.status = Signal(2)
-
         self.sync += [
             If(self.run_algorithm.storage,
                 If(self.counter == self.N_points - 1,
-                    self.status.eq(self.status + 1)
+                    If(self.status == self.max_status.storage,
+                        self.status.eq(STATUS_REPLAY)
+                    ).Else(
+                        self.status.eq(self.status + 1)
+                    )
                 )
             ).Else(
                 self.status.eq(STATUS_REPLAY)
@@ -154,7 +172,7 @@ class FeedForwardPlayer(Module, AutoCSR):
             ),
 
             If(self.run_algorithm.storage,
-                self.ff_wrport.we.eq(self.status == STATUS_REPLAY_ADJUST),
+                self.ff_wrport.we.eq((self.status == STATUS_REPLAY_ADJUST) | (self.status == STATUS_REPLAY_FILTER_DIRECTION)),
                 If(self.status == STATUS_REPLAY_ADJUST,
                     If(self.counter == self.N_points - 1,
                         self.adjustment_counter.eq(self.adjustment_counter + 1),
@@ -194,6 +212,44 @@ class FeedForwardPlayer(Module, AutoCSR):
 
                     If(self.counter == self.clock.current_zone_end - self.keep_constant_at_end.storage,
                         constant_signal.eq(self.ff_wrport.dat_w)
+                    )
+                )
+            )
+        ]
+
+    def filter_direction(self):
+        initial = 1 << self.N_bits
+        self.zone_bounds = [
+            Signal((self.N_bits+2, True), name='zone_bound_%d' % N, reset=initial)
+            for N in range(self.N_zones)
+        ]
+        current_zone_bound = Array(self.zone_bounds)[self.clock.current_zone]
+        self.current_tuning_direction = Signal((2, True))
+        self.comb += [
+            self.current_tuning_direction.eq(
+                Array(self.tuning_directions)[self.clock.current_zone]
+            )
+        ]
+        sign = self.current_tuning_direction
+
+        self.sync += [
+            If((self.status == STATUS_REPLAY_FILTER_DIRECTION - 1) & (self.counter == self.N_points - 1),
+                *[
+                    zone_bound.eq(initial)
+                    for zone_bound in self.zone_bounds
+                ]
+            ),
+            If((self.status == STATUS_REPLAY_FILTER_DIRECTION),
+                self.ff_wrport.adr.eq(self.counter),
+                If(current_zone_bound == initial,
+                    current_zone_bound.eq(self.value),
+                    self.ff_wrport.dat_w.eq(self.value)
+                ).Else(
+                    If(sign * self.value <= sign  * current_zone_bound,
+                        self.ff_wrport.dat_w.eq(self.value),
+                        current_zone_bound.eq(self.value)
+                    ).Else(
+                        self.ff_wrport.dat_w.eq(current_zone_bound)
                     )
                 )
             )
@@ -269,8 +325,8 @@ class FeedForwardPlayer(Module, AutoCSR):
 
     def bus_to_feedforward(self):
         """Loads a feed forward signal from CPU."""
-        self.data_in = CSRStorage(self.N_bits * 2)
-        self.data_addr = CSRStorage(bits_for(int(self.N_points / 2) - 1))
+        self.data_in = CSRStorage(self.N_bits)
+        self.data_addr = CSRStorage(bits_for(self.N_points - 1))
         #self.data_write = CSRStorage(1)
 
         self.sync += [

@@ -110,7 +110,7 @@ class Pid(Module):
             #self.scopegen.sweep_trigger_b.eq(self.fast_b.sweep.sweep.trigger),
 
             self.control_loop.adc.eq(self.analog.adc_a),
-            #self.fast_b.adc.eq(self.analog.adc_b),
+            self.control_loop.other_adc.eq(self.analog.adc_b),
             self.analog.dac_a.eq(self.control_loop.dac),
             # self.slow_a.adc.eq(self.xadc.adc[0] << 4),
             # self.ds0.data.eq(self.slow_a.dac),

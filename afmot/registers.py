@@ -15,7 +15,9 @@ class Pitaya:
         self._cached_data = {}
         self.parameters = {
             'decimation': 1,
-            'p': 0.05
+            # unused, right now
+            'p': 0.01,
+            'i': 1e-6
         }
 
     def connect(self):
@@ -36,7 +38,7 @@ class Pitaya:
         new = dict(
             control_loop_brk=1,
             control_loop_x_tap=1,
-            control_loop_y_tap=0,
+            control_loop_y_tap=1,
             control_loop_dy_sel=self.pitaya.signal("zero"),
             control_loop_y_limit_min=-8192,
             control_loop_y_limit_max=8191,
@@ -53,9 +55,12 @@ class Pitaya:
             gpio_n_outs=0b1,
 
             gpio_n_do1_en=self.pitaya.states('control_loop_clock_0'),
-            gpio_n_do2_en=self.pitaya.states('control_loop_clock_1'),
-            gpio_n_do3_en=self.pitaya.states('control_loop_clock_2'),
-            gpio_n_do4_en=self.pitaya.states('control_loop_clock_3'),
+            gpio_n_do2_en=self.pitaya.states(),
+            gpio_n_do3_en=self.pitaya.states(),
+            gpio_n_do4_en=self.pitaya.states(),
+            #gpio_n_do2_en=self.pitaya.states('control_loop_clock_1'),
+            #gpio_n_do3_en=self.pitaya.states('control_loop_clock_2'),
+            #gpio_n_do4_en=self.pitaya.states('control_loop_clock_3'),
             gpio_n_do0_en=self.pitaya.states()
         )
 
@@ -79,7 +84,8 @@ class Pitaya:
         #self.pitaya.set('fast_b_y_clear_en', self.pitaya.states('force'))
 
         # set PI parameters
-        self.pitaya.set_iir("control_loop_iir_a", *make_filter('P', k=self.parameters['p']))
+        self.pitaya.set_iir("control_loop_iir_a", *make_filter('P', k=.1))#self.parameters['p']))
+        self.pitaya.set_iir("control_loop_iir_c", *make_filter('I', f=10, k=.1))
 
         # re-enable lock
         #self.pitaya.set('fast_b_y_clear_en', self.pitaya.states())
@@ -95,17 +101,14 @@ class Pitaya:
                 num += full
             return num
 
-        for addr, [v1, v2] in enumerate(zip(data[0::2], data[1::2])):
+        for addr, v in enumerate(data):
             # two 14-bit values are saved in a single register
             # register width is 32 bits of which we use 28
 
             # handle negative numbers properly
-            v1, v2 = convert(v1), convert(v2)
 
             self.pitaya.set('%s_data_addr' % channel, addr)
-            self.pitaya.set('%s_data_in' % channel, v1 + (v2 << N_bits))
-
-        self.pitaya.set('%s_enabled' % channel, 1)
+            self.pitaya.set('%s_data_in' % channel, convert(v))
 
     def _read_sequence(self, N_bits, N_points):
         channel = 'control_loop_sequence_player'
@@ -153,9 +156,12 @@ class Pitaya:
 
     def start_clock(self, length, end0, end1, end2):
         channel = 'control_loop_sequence_player'
-        self.pitaya.set('%s_zone_end_1', int(length * end0))
-        self.pitaya.set('%s_zone_end_1', int(length * end0))
-        self.pitaya.set('%s_zone_end_1', int(length * end0))
+        for i, end in enumerate((end0, end1, end2)):
+            self.pitaya.set(
+                '%s_zone_end_%d' % (channel, i),
+                int(length * end) if end is not None else -1
+            )
+
         self.pitaya.set('%s_enabled' % channel, 1)
 
     def set_feed_forward(self, feedforward, N_bits):
@@ -169,6 +175,7 @@ class Pitaya:
         self.pitaya.set('control_loop_sequence_player_recording', 1)
         # just to be sure...
         sleep(0.001)
+        self.pitaya.set('control_loop_sequence_player_recording', 0)
 
         measured_control = self._read_sequence(N_bits, N_points)
         return measured_control
