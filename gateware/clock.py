@@ -1,6 +1,7 @@
 from migen import Module, Signal, If, bits_for, Array, Memory, ClockDomainsRenamer, Mux
-from misoc.interconnect.csr import CSRStorage, AutoCSR, CSRStatus
 from migen.genlib.cdc import MultiReg, GrayCounter
+from .constants import STATUS_REPLAY, STATUS_REPLAY_RECORD_COUNT, \
+    STATUS_REPLAY_ADJUST, STATUS_REPLAY_FILTER_DIRECTION
 
 
 class ClockPlayer(Module):
@@ -9,16 +10,8 @@ class ClockPlayer(Module):
         self.N_points = N_points
         self.N_zones = N_zones
 
-        self.enabled = Signal()
-        self.reset_sequence = Signal()
-        self.zone_ends = [
-            # we make it 1 bit wider than needed in order to make it possible
-            # to disable a zone (i.e. zone border > N_points)
-            Signal(1 + bits_for(N_points - 1))
-            for N in range(N_zones - 1)
-        ]
-        self.request_stop = Signal()
-        self.stop_zone = Signal(bits_for(N_zones))
+        self.clone_signals(parent)
+
         self.stopped = Signal()
 
         self.current_zone = Signal(bits_for(self.N_zones))
@@ -28,6 +21,25 @@ class ClockPlayer(Module):
 
         self.run_counter()
         self.play_clock()
+
+    def clone_signals(self, parent):
+        self.enabled = Signal.like(parent.enabled.storage)
+        self.reset_sequence = Signal.like(parent.reset_sequence)
+        self.zone_ends = [
+            # we make it 1 bit wider than needed in order to make it possible
+            # to disable a zone (i.e. zone border > N_points)
+            Signal(1 + bits_for(self.N_points - 1))
+            for N in range(self.N_zones - 1)
+        ]
+        self.request_stop = Signal.like(parent.request_stop.storage)
+        self.stop_zone = Signal.like(parent.stop_zone.storage)
+
+        self.comb += [
+            self.enabled.eq(parent.enabled.storage),
+            self.reset_sequence.eq(parent.reset_sequence),
+            self.request_stop.eq(parent.request_stop.storage & (parent.status == STATUS_REPLAY)),
+            self.stop_zone.eq(parent.stop_zone.storage),
+        ]
 
     def run_counter(self):
         self.leading_counter = Signal(bits_for(self.N_points - 1))
@@ -52,11 +64,15 @@ class ClockPlayer(Module):
         counter_is_at_zone_end = self.counter == self.current_zone_end
         counter_is_at_last_point = self.counter == self.N_points - 1
 
+        self.counter_in_zone = Signal(bits_for(self.N_points))
+
         self.sync += [
             If(self.reset_sequence | ((~self.enabled) & 0b1),
-                self.current_zone.eq(0)
+                self.current_zone.eq(0),
+                self.counter_in_zone.eq(0),
             ),
             If(counter_is_at_zone_end | counter_is_at_last_point,
+                self.counter_in_zone.eq(0),
                 If(counter_is_at_last_point,
                     self.current_zone.eq(0)
                 ).Else(
@@ -68,6 +84,8 @@ class ClockPlayer(Module):
                         )
                     )
                 )
+            ).Else(
+                self.counter_in_zone.eq(self.counter_in_zone + 1)
             )
         ]
 

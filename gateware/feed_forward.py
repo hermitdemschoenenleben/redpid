@@ -2,12 +2,10 @@ from migen import Module, Signal, If, bits_for, Array, Memory, ClockDomainsRenam
 from misoc.interconnect.csr import CSRStorage, AutoCSR, CSRStatus
 from migen.genlib.cdc import MultiReg, GrayCounter
 from .clock import ClockPlayer
-
-
-STATUS_REPLAY = 0
-STATUS_REPLAY_RECORD_COUNT = 1
-STATUS_REPLAY_ADJUST = 2
-STATUS_REPLAY_FILTER_DIRECTION = 3
+from .utils import create_memory
+from .recorder import Recorder
+from .constants import STATUS_REPLAY, STATUS_REPLAY_RECORD_COUNT, \
+    STATUS_REPLAY_ADJUST, STATUS_REPLAY_FILTER_DIRECTION, STATUS_REPLAY_MEAN
 
 
 class FeedForwardPlayer(Module, AutoCSR):
@@ -29,6 +27,7 @@ class FeedForwardPlayer(Module, AutoCSR):
 
         self.enabled = CSRStorage()
         self.reset_sequence = Signal()
+        # FIXME: wirklich nötig?
         self.value_internal = Signal((self.N_bits, True))
         self.value = Signal.like(self.value_internal)
         self.request_stop = CSRStorage()
@@ -36,7 +35,16 @@ class FeedForwardPlayer(Module, AutoCSR):
 
         self.run_algorithm = CSRStorage()
         self.status = Signal(10)
-        self.max_status = CSRStorage(10, reset=3)
+        self.max_status = CSRStorage(10, reset=4)
+
+        self.mean_start = CSRStorage(self.N_bits)
+
+        # is recording enabled?
+        self.recording = CSRStorage()
+        self.data_out = CSRStatus(self.N_bits)
+        self.data_out_addr = CSRStorage(bits_for(self.N_points - 1))
+        self.error_signal_out = CSRStatus(1)
+        self.error_signal_out_addr = CSRStorage(bits_for(self.N_points - 1))
 
         self.zone_ends = []
         for N in range(N_zones - 1):
@@ -54,6 +62,13 @@ class FeedForwardPlayer(Module, AutoCSR):
             setattr(self, name, storage)
             self.tuning_directions.append(storage.storage)
 
+        self.curvatures = []
+        for N in range(N_zones):
+            name = 'curvature_%d' % N
+            storage = CSRStorage(2, name=name)
+            setattr(self, name, storage)
+            self.curvatures.append(storage.storage)
+
         self.comb += [
             self.value.eq(
                 Mux(
@@ -65,15 +80,9 @@ class FeedForwardPlayer(Module, AutoCSR):
         ]
 
         self.submodules.clock = ClockPlayer(self, N_points=N_points, N_zones=N_zones)
-
         self.counter = Signal.like(self.clock.counter)
         self.leading_counter = Signal.like(self.clock.leading_counter)
         self.comb += [
-            self.clock.enabled.eq(self.enabled.storage),
-            self.clock.reset_sequence.eq(self.reset_sequence),
-            self.clock.request_stop.eq(self.request_stop.storage & (self.status == STATUS_REPLAY)),
-            self.clock.stop_zone.eq(self.stop_zone.storage),
-
             self.counter.eq(self.clock.counter),
             self.leading_counter.eq(self.clock.leading_counter),
 
@@ -83,48 +92,30 @@ class FeedForwardPlayer(Module, AutoCSR):
             ]
         ]
 
+        self.submodules.recorder = Recorder(self, N_bits=N_bits, N_points=N_points, N_zones=N_zones)
+
         self.init_memories()
 
         self.update_status()
         self.replay_feedforward()
-        self.record_output()
         self.adjust_feedforward()
         self.filter_direction()
+        #self.calculate_mean()
+        self.filter_slope()
 
         # communication with CPU via the bus
         self.bus_to_feedforward()
-        self.feedforward_to_bus()
 
     def init_memories(self):
         """Initializes memories."""
-        def create_memory(N_bits, N_points, name):
-            setattr(self.specials, name, Memory(N_bits, N_points, name=name))
-            mem = getattr(self, name)
-
-            rdport = mem.get_port()
-            wrport = mem.get_port(write_capable=True)
-
-            return rdport, wrport
-
         # initialize buffer for feed forward
         self.ff_rdport, self.ff_wrport = create_memory(
-            self.N_bits, self.N_points, 'feedforward'
-        )
-
-        # initialize buffer for recorded output
-        self.rec_rdport, self.rec_wrport = create_memory(
-            self.N_bits, self.N_points, 'recorded'
-        )
-
-        # initialize buffer for recorded input
-        self.rec_error_signal_rdport, self.rec_error_signal_wrport = create_memory(
-            2, self.N_points, 'recorded_error_signal'
+            self, self.N_bits, self.N_points, 'feedforward'
         )
 
         # register all the ports
         self.specials += [
-            self.ff_rdport, self.ff_wrport, self.rec_rdport, self.rec_wrport,
-            self.rec_error_signal_wrport, self.rec_error_signal_rdport
+            self.ff_rdport, self.ff_wrport
         ]
 
     def update_status(self):
@@ -152,7 +143,7 @@ class FeedForwardPlayer(Module, AutoCSR):
     def adjust_feedforward(self):
         current_error_signal = Signal((2, True))
 
-        current_error_signal_counter = self.error_signal_counters[self.clock.current_zone]
+        current_error_signal_counter = self.recorder.error_signal_counters[self.clock.current_zone]
 
         self.step_size = CSRStorage(14, reset=1, write_from_dev=True)
         self.decrease_step_size_after = CSRStorage(16)
@@ -167,12 +158,19 @@ class FeedForwardPlayer(Module, AutoCSR):
             self.actual_step_size.eq(self.step_size.storage >> step_size_shift),
             # read error signal from memory
             If(self.run_algorithm.storage,
-                self.rec_error_signal_rdport.adr.eq(self.leading_counter),
-                current_error_signal.eq(self.rec_error_signal_rdport.dat_r),
+                self.recorder.rec_error_signal_rdport.adr.eq(self.leading_counter),
+                current_error_signal.eq(self.recorder.rec_error_signal_rdport.dat_r),
             ),
 
             If(self.run_algorithm.storage,
-                self.ff_wrport.we.eq((self.status == STATUS_REPLAY_ADJUST) | (self.status == STATUS_REPLAY_FILTER_DIRECTION)),
+                self.ff_wrport.we.eq(
+                    (self.status == STATUS_REPLAY_ADJUST)
+                    | (self.status == STATUS_REPLAY_FILTER_DIRECTION)
+                    | (
+                        (self.status >= STATUS_REPLAY_MEAN)
+                        & (self.clock.counter_in_zone > self.mean_start.storage + 3)
+                    )
+                ),
                 If(self.status == STATUS_REPLAY_ADJUST,
                     If(self.counter == self.N_points - 1,
                         self.adjustment_counter.eq(self.adjustment_counter + 1),
@@ -255,70 +253,69 @@ class FeedForwardPlayer(Module, AutoCSR):
             )
         ]
 
-    def record_output(self):
-        """Records error and control signal over one cycle.
+    """
+    bei write enabled fehlt:
+    | (
+                        (self.status >= STATUS_REPLAY_MEAN)
+                        & (self.counter > self.mean_start.storage + 1)
+                    )
 
-        Recording is activated if `recording` is True."""
-        # the error signal at the current timestamp
-        self.error_signal = Signal((2, True))
-        # the control signal at the current timestamp
-        self.control_signal = Signal((self.N_bits, True))
-
-        # we are going to save the summed error signal over one cycle in this
-        # signal
-        self.error_signal_counters = Array([
-            Signal((bits_for(self.N_points * 3), True), name='error_signal_counter_%d' % N)
-            for N in range(self.N_zones)
-        ])
-
-        # is recording enabled?
-        self.recording = CSRStorage()
-
-        current_error_signal_counter = self.error_signal_counters[self.clock.current_zone]
+    def calculate_mean(self):
+        value_before = Signal((self.N_bits, True))
+        sum_ = Signal((self.N_bits+2, True))
 
         self.sync += [
-            # record control signal
-            self.rec_wrport.we.eq(self.recording.storage),
-            self.rec_wrport.adr.eq(self.counter),
-            self.rec_wrport.dat_w.eq(self.control_signal),
-
-            # record error signal
-            self.rec_error_signal_wrport.we.eq(
-                self.recording.storage | (self.status == STATUS_REPLAY_RECORD_COUNT)
-            ),
-            self.rec_error_signal_wrport.adr.eq(self.counter),
-            self.rec_error_signal_wrport.dat_w.eq(self.error_signal),
-
-            If(self.status == STATUS_REPLAY_RECORD_COUNT,
-               # update the sum over the error signal
-                current_error_signal_counter.eq(
-                    current_error_signal_counter + self.error_signal
+            value_before.eq(self.value),
+            If(self.status >= STATUS_REPLAY_MEAN,
+                self.ff_wrport.adr.eq(self.counter - 1),
+                If(self.clock.counter_in_zone > self.mean_start.storage,
+                    sum_.eq(self.value + value_before)
+                ).Else(
+                    sum_.eq(self.value << 1)
                 )
-            ).Elif(self.status == STATUS_REPLAY,
-                # reset all error signal counters
-                *[
-                    es_counter.eq(0)
-                    for es_counter in self.error_signal_counters
-                ]
             )
         ]
 
-        self.end_counter = Signal(2)
+        self.sync += [
+            If(self.status >= STATUS_REPLAY_MEAN,
+                self.ff_wrport.dat_w.eq(sum_ >> 1)
+            )
+        ]"""
+
+    def filter_slope(self):
+        self.value_before_1 = Signal((self.N_bits, True))
+        self.value_before_2 = Signal((self.N_bits, True))
+
+        sum_ = Signal((self.N_bits+2, True))
 
         self.sync += [
-            If(self.recording.storage,
-                If(self.counter == 0,
-                    self.end_counter.eq(self.end_counter + 1)
-                )
-            ).Else(
-                self.end_counter.eq(0)
+            self.value_before_1.eq(self.value),
+            self.value_before_2.eq(self.value_before_1),
+
+            If(self.status >= STATUS_REPLAY_MEAN,
+                self.ff_wrport.adr.eq(self.counter - 2),
+                #If(self.clock.counter_in_zone > self.mean_start.storage,
+                    sum_.eq((self.value + self.value_before_2) >> 1)
+                #).Else(
+                #    sum_.eq(self.value << 1)
+                #)
             )
         ]
 
+        self.current_curvature = Signal((2, True))
         self.comb += [
-            If(self.recording.storage,
-                If(self.end_counter == 2,
-                    self.recording.storage.eq(0)
+            self.current_curvature.eq(
+                Array(self.curvatures)[self.clock.current_zone]
+            )
+        ]
+        sign = self.current_curvature
+
+        self.sync += [
+            If(self.status >= STATUS_REPLAY_MEAN,
+                If(sign * self.value_before_2 > sign * sum_,
+                    self.ff_wrport.dat_w.eq(sum_)
+                ).Else(
+                    self.ff_wrport.dat_w.eq(self.value_before_2)
                 )
             )
         ]
@@ -336,23 +333,5 @@ class FeedForwardPlayer(Module, AutoCSR):
                 self.ff_wrport.we.eq(1),
                 self.ff_wrport.adr.eq(self.data_addr.storage),
                 self.ff_wrport.dat_w.eq(self.data_in.storage),
-            )
-        ]
-
-    def feedforward_to_bus(self):
-        """Writes the current feed forward to the bus."""
-        self.data_out = CSRStatus(self.N_bits)
-        self.data_out_addr = CSRStorage(bits_for(self.N_points - 1))
-
-        self.error_signal_out = CSRStatus(1)
-        self.error_signal_out_addr = CSRStorage(bits_for(self.N_points - 1))
-
-        self.sync += [
-            self.rec_rdport.adr.eq(self.data_out_addr.storage),
-            self.data_out.status.eq(self.rec_rdport.dat_r),
-
-            If(~self.run_algorithm.storage,
-                self.rec_error_signal_rdport.adr.eq(self.error_signal_out_addr.storage),
-                self.error_signal_out.status.eq(self.rec_error_signal_rdport.dat_r),
             )
         ]

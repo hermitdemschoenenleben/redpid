@@ -10,11 +10,12 @@ from utils import do, LENGTH
 
 def load_data(filename):
     with open(filename, 'r') as f:
+        print('LOAD', filename)
         d = json.load(f)
         control_data = d['data']
         duration = d['duration']
-        decimation = d['decimation']
-        error_signal = d['error_signal']
+        decimation = d.get('decimation', 1)
+        error_signal = d['inp_data']
 
     return control_data, error_signal, duration, decimation
 
@@ -92,4 +93,4 @@ def process_control_data(filename='control_raw.json', combine=False, plot=False)
 
 
 if __name__ == '__main__':
-    processed = process_control_data(True, True)
+    processed = process_control_data('control_raw.json', combine=True, plot=True)

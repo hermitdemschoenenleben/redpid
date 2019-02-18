@@ -177,11 +177,11 @@ class FastChain(Module, AutoCSR):
         ]
 
         self.comb += [
-            self.sequence_player.control_signal.eq(self.y_limit.y),
+            self.sequence_player.recorder.control_signal.eq(self.y_limit.y),
             If(self.iir_a.x > 0,
-                self.sequence_player.error_signal.eq(1)
+                self.sequence_player.recorder.error_signal.eq(1)
             ).Else(
-                self.sequence_player.error_signal.eq(-1)
+                self.sequence_player.recorder.error_signal.eq(-1)
             )
         ]
 

@@ -78,8 +78,8 @@ def testbench(player: FeedForwardPlayer, N_bits: int, N_points: int):
     yield from player.zone_end_0.write(zone_ends[0])
     yield from player.zone_end_1.write(zone_ends[1])
     yield from player.zone_end_2.write(zone_ends[2])
-    yield from player.tuning_direction_0.write(1)
-    yield from player.tuning_direction_1.write(-1)
+    yield from player.tuning_direction_0.write(-1)
+    yield from player.tuning_direction_1.write(1)
 
     N_runs = 0
     while True:
