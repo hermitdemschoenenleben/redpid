@@ -32,15 +32,6 @@ from .dna import DNA
 from .lfsr import XORSHIFTGen
 
 
-class PIDCSR(Module, AutoCSR):
-    def __init__(self):
-        self.sync_sequences = Signal()
-        self.state_in = [self.sync_sequences]
-        self.signal_in = []
-        self.state_out = []
-        self.signal_out = []
-
-
 class Pid(Module):
     def __init__(self, platform):
         csr_map = {
@@ -48,10 +39,7 @@ class Pid(Module):
                 "control_loop": 0,
                 #"slow_a": 2, "slow_b": 3, "slow_c": 4, "slow_d": 5,
                 #"scopegen": 6, "noise": 7,
-                'root': 8
         }
-
-        self.submodules.root = PIDCSR()
 
         self.submodules.analog = PitayaAnalog(
                 platform.request("adc"), platform.request("dac"))
@@ -79,10 +67,6 @@ class Pid(Module):
         self.submodules.control_loop = FastChain(14, s, c)
         #self.submodules.fast_b = FastChain(True, 14, s, c)
 
-        self.comb += [
-            self.control_loop.sequence_player.reset_sequence.eq(self.root.sync_sequences),
-        ]
-
         sys_slow = ClockDomainsRenamer("sys_slow")
         """self.submodules.slow_a = sys_slow(SlowChain(16, s, c))
         self.slow_a.iir.interval.value.value *= 15
@@ -101,7 +85,6 @@ class Pid(Module):
             #("slow_a", self.slow_a), ("slow_b", self.slow_b),
             #("slow_c", self.slow_c), ("slow_d", self.slow_d),
             #("scopegen", self.scopegen), ("noise", self.noise),
-            ("root", self.root)
         ])
 
         self.comb += [

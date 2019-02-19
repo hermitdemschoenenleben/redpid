@@ -6,7 +6,7 @@ from migen.sim import Simulator
 from random import randrange, randint
 from misoc.interconnect.csr import CSRStorage
 
-from .feed_forward import FeedForwardPlayer, STATUS_REPLAY, STATUS_REPLAY_RECORD_COUNT
+from .feed_forward import FeedForwardPlayer, STATE_REPLAY, STATE_REPLAY_RECORD_COUNT
 
 
 def convert_number(n, N_bits):
@@ -17,10 +17,10 @@ def convert_number(n, N_bits):
 
 
 class Laser:
-    def __init__(self, N_points, targets, zone_ends, delay):
+    def __init__(self, N_points, targets, zone_edges, delay):
         self.N_points = N_points
         self.targets = targets
-        self.zone_ends = zone_ends
+        self.zone_edges = zone_edges
         self.delay = delay
         self.reset()
 
@@ -39,7 +39,7 @@ class Laser:
 
     def get_error_signal(self, counter):
         target = None
-        for zone, end in enumerate(self.zone_ends):
+        for zone, end in enumerate(self.zone_edges):
             if counter < end:
                 target = self.targets[zone]
                 break
@@ -59,12 +59,12 @@ def write_log(log):
 
 
 def testbench(player: FeedForwardPlayer, N_bits: int, N_points: int):
-    #zone_ends = (int((N_points / 4) - 1), int((N_points / 2) - 1), int((3 * N_points / 4) - 1))
-    zone_ends = (int((N_points / 2) - 1), N_points + 1, N_points + 1)
+    #zone_edges = (int((N_points / 4) - 1), int((N_points / 2) - 1), int((3 * N_points / 4) - 1))
+    zone_edges = (int((N_points / 2) - 1), N_points + 1, N_points + 1)
     delay = int(N_points/160)
-    #l = Laser(N_points, (2500, 2400, -200, -600), zone_ends, delay)
-    #l = Laser(N_points, (500, -500, -200, -600), zone_ends, delay)
-    l = Laser(N_points, (30, -30, -200, -600), zone_ends, delay)
+    #l = Laser(N_points, (2500, 2400, -200, -600), zone_edges, delay)
+    #l = Laser(N_points, (500, -500, -200, -600), zone_edges, delay)
+    l = Laser(N_points, (30, -30, -200, -600), zone_edges, delay)
 
     log_data = []
 
@@ -74,16 +74,16 @@ def testbench(player: FeedForwardPlayer, N_bits: int, N_points: int):
     yield from player.decrease_step_size_after.write(25)
     yield from player.enabled.write(1)
     yield from player.run_algorithm.write(1)
-    yield player.status.eq(3)
-    yield from player.zone_end_0.write(zone_ends[0])
-    yield from player.zone_end_1.write(zone_ends[1])
-    yield from player.zone_end_2.write(zone_ends[2])
-    yield from player.tuning_direction_0.write(-1)
-    yield from player.tuning_direction_1.write(1)
+    yield player.state.eq(3)
+    yield from player.zone_edge_0.write(zone_edges[0])
+    yield from player.zone_edge_1.write(zone_edges[1])
+    yield from player.zone_edge_2.write(zone_edges[2])
+    yield from player.ff_direction_0.write(-1)
+    yield from player.ff_direction_1.write(1)
 
     N_runs = 0
     while True:
-        status = yield player.status
+        state = yield player.state
         counter = yield player.counter
 
         """if counter == 0:
@@ -97,13 +97,13 @@ def testbench(player: FeedForwardPlayer, N_bits: int, N_points: int):
         yield
 
 
-        if status == STATUS_REPLAY_RECORD_COUNT:
+        if state == STATE_REPLAY_RECORD_COUNT:
             if counter == 0:
                 frequencies = []
 
             frequencies.append(frequency)
 
-        if status == STATUS_REPLAY and counter == 0:
+        if state == STATE_REPLAY and counter == 0:
             N_runs += 1
             print('RUN', N_runs)
 

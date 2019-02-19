@@ -79,17 +79,9 @@ class Pitaya:
             self.pitaya.set(k, int(v))
             print('SET', k, int(v))
 
-        # clear
-        #self.pitaya.set('fast_b_x_clear_en', self.pitaya.states('force'))
-        #self.pitaya.set('fast_b_y_clear_en', self.pitaya.states('force'))
-
         # set PI parameters
-        self.pitaya.set_iir("control_loop_iir_a", *make_filter('P', k=.1))#self.parameters['p']))
+        self.pitaya.set_iir("control_loop_iir_a", *make_filter('P', k=self.parameters['p']))
         self.pitaya.set_iir("control_loop_iir_c", *make_filter('I', f=10, k=.1))
-
-        # re-enable lock
-        #self.pitaya.set('fast_b_y_clear_en', self.pitaya.states())
-        #self.pitaya.set('fast_b_x_clear_en', self.pitaya.states())
 
     def _write_sequence(self, data, N_bits):
         channel = 'control_loop_sequence_player'
@@ -101,14 +93,16 @@ class Pitaya:
                 num += full
             return num
 
+        assert not self.pitaya.get('%s_run_algorithm'), \
+            'write is only possible if algorithm is not running'
+
+        self.pitaya.set('%s_data_write', 1)
+
         for addr, v in enumerate(data):
-            # two 14-bit values are saved in a single register
-            # register width is 32 bits of which we use 28
-
-            # handle negative numbers properly
-
             self.pitaya.set('%s_data_addr' % channel, addr)
             self.pitaya.set('%s_data_in' % channel, convert(v))
+
+        self.pitaya.set('%s_data_write', 0)
 
     def _read_sequence(self, N_bits, N_points):
         channel = 'control_loop_sequence_player'
@@ -158,7 +152,7 @@ class Pitaya:
         channel = 'control_loop_sequence_player'
         for i, end in enumerate((end0, end1, end2)):
             self.pitaya.set(
-                '%s_zone_end_%d' % (channel, i),
+                '%s_zone_edge_%d' % (channel, i),
                 int(length * end) if end is not None else -1
             )
 

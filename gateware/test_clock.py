@@ -8,9 +8,9 @@ from .clock import ClockPlayer
 
 
 def clock_testbench(dut, N_bits, N_points):
-    yield from dut.zone_end_0.write(3)
-    yield from dut.zone_end_1.write(7)
-    yield from dut.zone_end_2.write(11)
+    yield from dut.zone_edge_0.write(3)
+    yield from dut.zone_edge_1.write(7)
+    yield from dut.zone_edge_2.write(11)
 
     yield from dut.enabled.write(1)
 

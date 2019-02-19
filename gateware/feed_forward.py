@@ -1,11 +1,11 @@
 from migen import Module, Signal, If, bits_for, Array, Memory, ClockDomainsRenamer, Mux
 from misoc.interconnect.csr import CSRStorage, AutoCSR, CSRStatus
-from migen.genlib.cdc import MultiReg, GrayCounter
+
 from .clock import ClockPlayer
 from .utils import create_memory
 from .recorder import Recorder
-from .constants import STATUS_REPLAY, STATUS_REPLAY_RECORD_COUNT, \
-    STATUS_REPLAY_ADJUST, STATUS_REPLAY_FILTER_DIRECTION, STATUS_REPLAY_MEAN
+from .constants import STATE_REPLAY, STATE_REPLAY_RECORD_COUNT, \
+    STATE_REPLAY_ADJUST, STATE_REPLAY_FILTER_DIRECTION, STATE_REPLAY_FILTER_CURVATURE
 
 
 class FeedForwardPlayer(Module, AutoCSR):
@@ -21,90 +21,153 @@ class FeedForwardPlayer(Module, AutoCSR):
         self.N_bits = N_bits
         self.N_points = N_points
         self.N_zones = N_zones
+        self.N_address_bits = bits_for(self.N_points - 1)
 
+        self.last_point = self.N_points - 1
         self.max_pos = (1<<(self.N_bits - 1)) - 1
         self.max_neg = -1 * self.max_pos - 1
 
+        # CSR parameters
+
+        # is the feed forward clock running and is the module outputting values?
         self.enabled = CSRStorage()
-        self.reset_sequence = Signal()
-        # FIXME: wirklich nötig?
-        self.value_internal = Signal((self.N_bits, True))
-        self.value = Signal.like(self.value_internal)
+        # should the algorithm for continuous feed forward improvement run?
+        self.run_algorithm = CSRStorage()
+        # up to which state should the state machine go in each cycle?
+        self.max_state = CSRStorage(10, reset=STATE_REPLAY_FILTER_CURVATURE)
+
+        # request a stop at a specific zone
         self.request_stop = CSRStorage()
         self.stop_zone = CSRStorage(bits_for(N_zones))
 
-        self.run_algorithm = CSRStorage()
-        self.status = Signal(10)
-        self.max_status = CSRStorage(10, reset=4)
-
-        self.mean_start = CSRStorage(self.N_bits)
-
-        # is recording enabled?
+        # should the feed forward and error signal be recorded?
         self.recording = CSRStorage()
+
+        # communication with the bus
         self.data_out = CSRStatus(self.N_bits)
-        self.data_out_addr = CSRStorage(bits_for(self.N_points - 1))
+        self.data_out_addr = CSRStorage(self.N_address_bits)
         self.error_signal_out = CSRStatus(1)
-        self.error_signal_out_addr = CSRStorage(bits_for(self.N_points - 1))
+        self.error_signal_out_addr = CSRStorage(self.N_address_bits)
+        self.data_in = CSRStorage(self.N_bits)
+        self.data_addr = CSRStorage(self.N_address_bits)
+        self.data_write = CSRStorage(1)
 
-        self.zone_ends = []
+        self.step_size = CSRStorage(14, reset=1, write_from_dev=True)
+        self.decrease_step_size_after = CSRStorage(16)
+        self.keep_constant_at_end = CSRStorage(14)
+
+        self.zone_edges = []
         for N in range(N_zones - 1):
+            name = 'zone_edge_%d' % N
             # we make it 1 bit wider than needed in order to make it possible
-            # to disable a zone (i.e. zone border > N_points)
-            name = 'zone_end_%d' % N
-            storage = CSRStorage(1 + bits_for(N_points - 1), name=name)
+            # to disable a zone (i.e. zone edge = -1)
+            storage = CSRStorage(1 + self.N_address_bits, name=name)
             setattr(self, name, storage)
-            self.zone_ends.append(storage.storage)
+            self.zone_edges.append(storage.storage)
 
-        self.tuning_directions = []
+        self.ff_directions = []
         for N in range(N_zones):
-            name = 'tuning_direction_%d' % N
+            name = 'ff_direction_%d' % N
             storage = CSRStorage(2, name=name)
             setattr(self, name, storage)
-            self.tuning_directions.append(storage.storage)
+            self.ff_directions.append(storage.storage)
 
-        self.curvatures = []
+        self.ff_curvatures = []
+        self.ff_curvature_filtering_starts = []
         for N in range(N_zones):
-            name = 'curvature_%d' % N
+            name = 'ff_curvature_%d' % N
             storage = CSRStorage(2, name=name)
             setattr(self, name, storage)
-            self.curvatures.append(storage.storage)
+            self.ff_curvatures.append(storage.storage)
 
+            name = 'ff_curvature_filtering_start_%d' % N
+            storage = CSRStorage(self.N_bits, name=name)
+            setattr(self, name, storage)
+            self.ff_curvature_filtering_starts.append(storage.storage)
+
+
+        # Signals
+
+
+        self.state = Signal(10)
+        self.value_internal = Signal((self.N_bits, True))
+        self.value = Signal.like(self.value_internal)
         self.comb += [
             self.value.eq(
-                Mux(
-                    self.enabled.storage & ((~self.reset_sequence) & 0b1),
-                    self.value_internal,
-                    0
-                )
+                Mux(self.enabled.storage, self.value_internal, 0)
             )
         ]
 
+
+        # Submodules
+        # Connections to and from submodules
+
+
         self.submodules.clock = ClockPlayer(self, N_points=N_points, N_zones=N_zones)
+
         self.counter = Signal.like(self.clock.counter)
         self.leading_counter = Signal.like(self.clock.leading_counter)
-        self.comb += [
-            self.counter.eq(self.clock.counter),
-            self.leading_counter.eq(self.clock.leading_counter),
-
-            *[
-                self.clock.zone_ends[i].eq(self.zone_ends[i])
-                for i in range(self.N_zones - 1)
-            ]
-        ]
+        self.current_zone = Signal.like(self.clock.current_zone)
+        self.counter_in_zone = Signal.like(self.clock.counter_in_zone)
+        self.current_zone_edge = Signal.like(self.clock.current_zone_edge)
 
         self.submodules.recorder = Recorder(self, N_bits=N_bits, N_points=N_points, N_zones=N_zones)
 
-        self.init_memories()
+        self.comb += [
+            # connections from clock
+            self.counter.eq(self.clock.counter),
+            self.leading_counter.eq(self.clock.leading_counter),
+            self.current_zone.eq(self.clock.current_zone),
+            self.counter_in_zone.eq(self.clock.counter_in_zone),
+            self.current_zone_edge.eq(self.clock.current_zone_edge),
 
+            # connections to clock
+            self.clock.enabled.eq(self.enabled.storage),
+            self.clock.request_stop.eq(self.request_stop.storage & (self.state == STATE_REPLAY)),
+            self.clock.stop_zone.eq(self.stop_zone.storage),
+            *[
+                self.clock.zone_edges[i].eq(self.zone_edges[i])
+                for i in range(self.N_zones - 1)
+            ],
+
+            # connections to recorder
+            self.recorder.current_zone.eq(self.current_zone),
+            self.recorder.recording.eq(self.recording.storage),
+            self.recorder.counter.eq(self.counter),
+            self.recorder.run_algorithm.eq(self.run_algorithm.storage),
+            self.recorder.data_out_addr.eq(self.data_out_addr.storage),
+            self.recorder.error_signal_out_addr.eq(self.error_signal_out_addr.storage),
+
+
+            # connections from recorder
+            self.data_out.status.eq(self.recorder.data_out),
+            self.error_signal_out.status.eq(self.recorder.error_signal_out)
+        ]
+
+        # FIXME: ist das richtig, dass das sync und nicht comb ist?
+        self.sync += [
+            self.recorder.state.eq(self.state)
+        ]
+
+        self.init_memories()
         self.update_status()
         self.replay_feedforward()
         self.adjust_feedforward()
-        self.filter_direction()
-        #self.calculate_mean()
-        self.filter_slope()
+        self.ensure_correct_ff_slope_sign()
+        self.ensure_correct_ff_curvature()
 
         # communication with CPU via the bus
         self.bus_to_feedforward()
+
+        self.sync += [
+            If(self.run_algorithm.storage,
+                self.ff_wrport.we.eq(
+                    self.ff_adjustment_we
+                    | self.ff_slope_filter_we
+                    | self.ff_curvature_filter_we
+                )
+            )
+        ]
 
     def init_memories(self):
         """Initializes memories."""
@@ -122,15 +185,15 @@ class FeedForwardPlayer(Module, AutoCSR):
         """Updates the status of the state machine when one cycle is completed."""
         self.sync += [
             If(self.run_algorithm.storage,
-                If(self.counter == self.N_points - 1,
-                    If(self.status == self.max_status.storage,
-                        self.status.eq(STATUS_REPLAY)
+                If(self.counter == self.last_point,
+                    If(self.state == self.max_state.storage,
+                        self.state.eq(STATE_REPLAY)
                     ).Else(
-                        self.status.eq(self.status + 1)
+                        self.state.eq(self.state + 1)
                     )
                 )
             ).Else(
-                self.status.eq(STATUS_REPLAY)
+                self.state.eq(STATE_REPLAY)
             )
         ]
 
@@ -143,12 +206,8 @@ class FeedForwardPlayer(Module, AutoCSR):
     def adjust_feedforward(self):
         current_error_signal = Signal((2, True))
 
-        current_error_signal_counter = self.recorder.error_signal_counters[self.clock.current_zone]
-
-        self.step_size = CSRStorage(14, reset=1, write_from_dev=True)
-        self.decrease_step_size_after = CSRStorage(16)
+        current_error_signal_counter = self.recorder.error_signal_counters[self.current_zone]
         self.adjustment_counter = Signal(16)
-        self.keep_constant_at_end = CSRStorage(14)
         constant_signal = Signal(14)
 
         step_size_shift = Signal(6)
@@ -163,16 +222,8 @@ class FeedForwardPlayer(Module, AutoCSR):
             ),
 
             If(self.run_algorithm.storage,
-                self.ff_wrport.we.eq(
-                    (self.status == STATUS_REPLAY_ADJUST)
-                    | (self.status == STATUS_REPLAY_FILTER_DIRECTION)
-                    | (
-                        (self.status >= STATUS_REPLAY_MEAN)
-                        & (self.clock.counter_in_zone > self.mean_start.storage + 3)
-                    )
-                ),
-                If(self.status == STATUS_REPLAY_ADJUST,
-                    If(self.counter == self.N_points - 1,
+                If(self.state == STATE_REPLAY_ADJUST,
+                    If(self.counter == self.last_point,
                         self.adjustment_counter.eq(self.adjustment_counter + 1),
                         If(self.adjustment_counter == self.decrease_step_size_after.storage,
                             self.adjustment_counter.eq(0),
@@ -183,7 +234,7 @@ class FeedForwardPlayer(Module, AutoCSR):
                     ),
                     # write adjusted feed forward
                     self.ff_wrport.adr.eq(self.counter),
-                    If(self.counter <= self.clock.current_zone_end - self.keep_constant_at_end.storage,
+                    If(self.counter <= self.current_zone_edge - self.keep_constant_at_end.storage,
                         If (current_error_signal_counter > 0,
                             self.ff_wrport.dat_w.eq(
                                 Mux(self.value_internal + self.actual_step_size <= self.max_pos,
@@ -208,36 +259,43 @@ class FeedForwardPlayer(Module, AutoCSR):
                         current_error_signal_counter - current_error_signal
                     ),
 
-                    If(self.counter == self.clock.current_zone_end - self.keep_constant_at_end.storage,
+                    If(self.counter == self.current_zone_edge - self.keep_constant_at_end.storage,
                         constant_signal.eq(self.ff_wrport.dat_w)
                     )
                 )
             )
         ]
 
-    def filter_direction(self):
+        self.ff_adjustment_we = Signal()
+        self.comb += [
+            self.ff_adjustment_we.eq(
+                self.state == STATE_REPLAY_ADJUST
+            )
+        ]
+
+    def ensure_correct_ff_slope_sign(self):
         initial = 1 << self.N_bits
         self.zone_bounds = [
             Signal((self.N_bits+2, True), name='zone_bound_%d' % N, reset=initial)
             for N in range(self.N_zones)
         ]
-        current_zone_bound = Array(self.zone_bounds)[self.clock.current_zone]
-        self.current_tuning_direction = Signal((2, True))
+        current_zone_bound = Array(self.zone_bounds)[self.current_zone]
+        self.current_ff_direction = Signal((2, True))
         self.comb += [
-            self.current_tuning_direction.eq(
-                Array(self.tuning_directions)[self.clock.current_zone]
+            self.current_ff_direction.eq(
+                Array(self.ff_directions)[self.current_zone]
             )
         ]
-        sign = self.current_tuning_direction
+        sign = self.current_ff_direction
 
         self.sync += [
-            If((self.status == STATUS_REPLAY_FILTER_DIRECTION - 1) & (self.counter == self.N_points - 1),
+            If((self.state == STATE_REPLAY_FILTER_DIRECTION - 1) & (self.counter == self.last_point),
                 *[
                     zone_bound.eq(initial)
                     for zone_bound in self.zone_bounds
                 ]
             ),
-            If((self.status == STATUS_REPLAY_FILTER_DIRECTION),
+            If((self.state == STATE_REPLAY_FILTER_DIRECTION),
                 self.ff_wrport.adr.eq(self.counter),
                 If(current_zone_bound == initial,
                     current_zone_bound.eq(self.value),
@@ -253,36 +311,14 @@ class FeedForwardPlayer(Module, AutoCSR):
             )
         ]
 
-    """
-    bei write enabled fehlt:
-    | (
-                        (self.status >= STATUS_REPLAY_MEAN)
-                        & (self.counter > self.mean_start.storage + 1)
-                    )
-
-    def calculate_mean(self):
-        value_before = Signal((self.N_bits, True))
-        sum_ = Signal((self.N_bits+2, True))
-
-        self.sync += [
-            value_before.eq(self.value),
-            If(self.status >= STATUS_REPLAY_MEAN,
-                self.ff_wrport.adr.eq(self.counter - 1),
-                If(self.clock.counter_in_zone > self.mean_start.storage,
-                    sum_.eq(self.value + value_before)
-                ).Else(
-                    sum_.eq(self.value << 1)
-                )
+        self.ff_slope_filter_we = Signal()
+        self.comb += [
+            self.ff_slope_filter_we.eq(
+                self.state == STATE_REPLAY_FILTER_DIRECTION
             )
         ]
 
-        self.sync += [
-            If(self.status >= STATUS_REPLAY_MEAN,
-                self.ff_wrport.dat_w.eq(sum_ >> 1)
-            )
-        ]"""
-
-    def filter_slope(self):
+    def ensure_correct_ff_curvature(self):
         self.value_before_1 = Signal((self.N_bits, True))
         self.value_before_2 = Signal((self.N_bits, True))
 
@@ -292,27 +328,29 @@ class FeedForwardPlayer(Module, AutoCSR):
             self.value_before_1.eq(self.value),
             self.value_before_2.eq(self.value_before_1),
 
-            If(self.status >= STATUS_REPLAY_MEAN,
+            If(self.state == STATE_REPLAY_FILTER_CURVATURE,
                 self.ff_wrport.adr.eq(self.counter - 2),
-                #If(self.clock.counter_in_zone > self.mean_start.storage,
-                    sum_.eq((self.value + self.value_before_2) >> 1)
-                #).Else(
-                #    sum_.eq(self.value << 1)
-                #)
+                sum_.eq((self.value + self.value_before_2) >> 1)
             )
         ]
 
-        self.current_curvature = Signal((2, True))
+        current_start = Signal.like(self.ff_curvature_filtering_starts[0])
+        current_target_curvature = Signal((2, True))
         self.comb += [
-            self.current_curvature.eq(
-                Array(self.curvatures)[self.clock.current_zone]
+            current_start.eq(
+                Array(self.ff_curvature_filtering_starts)[self.current_zone]
+            ),
+            current_target_curvature.eq(
+                Array(self.ff_curvatures)[self.current_zone]
             )
         ]
-        sign = self.current_curvature
+
+        sign = current_target_curvature
+        point_causes_wrong_curvature = sign * self.value_before_2 > sign * sum_
 
         self.sync += [
-            If(self.status >= STATUS_REPLAY_MEAN,
-                If(sign * self.value_before_2 > sign * sum_,
+            If(self.state == STATE_REPLAY_FILTER_CURVATURE,
+                If(point_causes_wrong_curvature,
                     self.ff_wrport.dat_w.eq(sum_)
                 ).Else(
                     self.ff_wrport.dat_w.eq(self.value_before_2)
@@ -320,17 +358,21 @@ class FeedForwardPlayer(Module, AutoCSR):
             )
         ]
 
+        self.ff_curvature_filter_we = Signal()
+        self.comb += [
+            self.ff_curvature_filter_we.eq(
+                (self.state == STATE_REPLAY_FILTER_CURVATURE)
+                & (self.counter_in_zone > current_start + 3)
+            )
+        ]
+
     def bus_to_feedforward(self):
         """Loads a feed forward signal from CPU."""
-        self.data_in = CSRStorage(self.N_bits)
-        self.data_addr = CSRStorage(bits_for(self.N_points - 1))
-        #self.data_write = CSRStorage(1)
-
         self.sync += [
-            #self.ff_wrport.we.eq(self.data_write.storage),
             If(~self.run_algorithm.storage,
-                # TODO: this should be set externally
-                self.ff_wrport.we.eq(1),
+                self.ff_wrport.we.eq(
+                    self.data_write.storage
+                ),
                 self.ff_wrport.adr.eq(self.data_addr.storage),
                 self.ff_wrport.dat_w.eq(self.data_in.storage),
             )

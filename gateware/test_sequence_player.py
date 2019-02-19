@@ -50,8 +50,6 @@ def sequence_player_testbench(dut, N_bits, N_points):
     # replay data and record data
     yield from dut.enabled.write(1)
 
-    yield dut.reset_sequence.eq(0)
-
     for i in range(4):
         if i == 1:
             yield from dut.recording.write(1)
@@ -75,12 +73,9 @@ def clock_testbench(dut, N_bits, N_points):
         yield
 
     yield from dut.dcycle.write(int(N_points/10))
-    yield dut.reset_sequence.eq(1)
 
     for i in range(N_points * 3):
         yield
-
-    yield dut.reset_sequence.eq(0)
 
     for i in range(N_points * 3):
         yield

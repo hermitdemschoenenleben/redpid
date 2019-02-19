@@ -1,8 +1,8 @@
 from migen import Module, Signal, If, bits_for, Array, Memory, ClockDomainsRenamer, Mux
 
 from .utils import create_memory
-from .constants import STATUS_REPLAY, STATUS_REPLAY_RECORD_COUNT, \
-    STATUS_REPLAY_ADJUST, STATUS_REPLAY_FILTER_DIRECTION
+from .constants import STATE_REPLAY, STATE_REPLAY_RECORD_COUNT, \
+    STATE_REPLAY_ADJUST, STATE_REPLAY_FILTER_DIRECTION
 
 
 class Recorder(Module):
@@ -13,15 +13,26 @@ class Recorder(Module):
         self.N_points = N_points
         self.N_zones = N_zones
 
-        self.status = Signal.like(parent.status)
-        self.sync += [
-            self.status.eq(parent.status)
-        ]
+        self.clone_signals(parent)
 
         self.create_memory()
         self.record_output()
         # communication with CPU via the bus
         self.feedforward_to_bus()
+
+    def clone_signals(self, parent):
+        # inputs
+        self.state = Signal.like(parent.state)
+        self.current_zone = Signal.like(parent.current_zone)
+        self.recording = Signal.like(parent.recording.storage)
+        self.counter = Signal.like(parent.counter)
+        self.run_algorithm = Signal.like(parent.run_algorithm.storage)#
+        self.data_out_addr = Signal.like(parent.data_out_addr.storage)
+        self.error_signal_out_addr = Signal.like(parent.error_signal_out_addr.storage)
+
+        # outputs
+        self.data_out = Signal.like(parent.data_out.status)
+        self.error_signal_out = Signal.like(parent.error_signal_out.status)
 
     def create_memory(self):
         # initialize buffer for recorded output
@@ -55,27 +66,27 @@ class Recorder(Module):
             for N in range(self.N_zones)
         ])
 
-        current_error_signal_counter = self.error_signal_counters[self.parent.clock.current_zone]
+        current_error_signal_counter = self.error_signal_counters[self.current_zone]
 
         self.sync += [
             # record control signal
-            self.rec_wrport.we.eq(self.parent.recording.storage),
-            self.rec_wrport.adr.eq(self.parent.counter),
+            self.rec_wrport.we.eq(self.recording),
+            self.rec_wrport.adr.eq(self.counter),
             self.rec_wrport.dat_w.eq(self.control_signal),
 
             # record error signal
             self.rec_error_signal_wrport.we.eq(
-                self.parent.recording.storage | (self.status == STATUS_REPLAY_RECORD_COUNT)
+                self.recording | (self.state == STATE_REPLAY_RECORD_COUNT)
             ),
-            self.rec_error_signal_wrport.adr.eq(self.parent.counter),
+            self.rec_error_signal_wrport.adr.eq(self.counter),
             self.rec_error_signal_wrport.dat_w.eq(self.error_signal),
 
-            If(self.status == STATUS_REPLAY_RECORD_COUNT,
+            If(self.state == STATE_REPLAY_RECORD_COUNT,
                # update the sum over the error signal
                 current_error_signal_counter.eq(
                     current_error_signal_counter + self.error_signal
                 )
-            ).Elif(self.status == STATUS_REPLAY,
+            ).Elif(self.state == STATE_REPLAY,
                 # reset all error signal counters
                 *[
                     es_counter.eq(0)
@@ -87,8 +98,8 @@ class Recorder(Module):
         self.end_counter = Signal(2)
 
         self.sync += [
-            If(self.parent.recording.storage,
-                If(self.parent.counter == 0,
+            If(self.recording,
+                If(self.counter == 0,
                     self.end_counter.eq(self.end_counter + 1)
                 )
             ).Else(
@@ -97,7 +108,7 @@ class Recorder(Module):
         ]
 
         self.comb += [
-            If(self.parent.recording.storage,
+            If(self.recording,
                 If(self.end_counter == 2,
                     self.parent.recording.storage.eq(0)
                 )
@@ -107,11 +118,11 @@ class Recorder(Module):
     def feedforward_to_bus(self):
         """Writes the current feed forward to the bus."""
         self.sync += [
-            self.rec_rdport.adr.eq(self.parent.data_out_addr.storage),
-            self.parent.data_out.status.eq(self.rec_rdport.dat_r),
+            self.rec_rdport.adr.eq(self.data_out_addr),
+            self.data_out.eq(self.rec_rdport.dat_r),
 
-            If(~self.parent.run_algorithm.storage,
-                self.rec_error_signal_rdport.adr.eq(self.parent.error_signal_out_addr.storage),
-                self.parent.error_signal_out.status.eq(self.rec_error_signal_rdport.dat_r),
+            If(~self.run_algorithm,
+                self.rec_error_signal_rdport.adr.eq(self.error_signal_out_addr),
+                self.error_signal_out.eq(self.rec_error_signal_rdport.dat_r),
             )
         ]
