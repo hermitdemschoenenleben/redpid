@@ -30,6 +30,8 @@ class ClockPlayer(Module):
         ]
         self.request_stop = Signal.like(parent.request_stop.storage)
         self.stop_zone = Signal.like(parent.stop_zone.storage)
+        self.state = Signal.like(parent.state)
+        self.max_state = Signal.like(parent.max_state.storage)
 
     def run_counter(self):
         self.leading_counter = Signal(bits_for(self.N_points - 1))
@@ -45,12 +47,14 @@ class ClockPlayer(Module):
                     self.counter.eq(self.leading_counter - 2)
                 ).Else(
                     self.leading_counter.eq(0),
-                    self.counter.eq(0)
+                    self.counter.eq(0),
                 )
             )
         ]
 
     def play_clock(self):
+        self.iteration_counter = Signal(20)
+
         counter_is_at_zone_edge = self.counter == self.current_zone_edge
         counter_is_at_last_point = self.counter == self.N_points - 1
 
@@ -60,6 +64,7 @@ class ClockPlayer(Module):
             If(((~self.enabled) & 0b1),
                 self.current_zone.eq(0),
                 self.counter_in_zone.eq(0),
+                self.iteration_counter.eq(0)
             ),
             If(counter_is_at_zone_edge | counter_is_at_last_point,
                 self.counter_in_zone.eq(0),
@@ -76,6 +81,13 @@ class ClockPlayer(Module):
                 )
             ).Else(
                 self.counter_in_zone.eq(self.counter_in_zone + 1)
+            ),
+
+            # update iteration counter
+            If(self.enabled & counter_is_at_last_point & (self.state == self.max_state),
+                self.iteration_counter.eq(
+                    self.iteration_counter + 1
+                )
             )
         ]
 

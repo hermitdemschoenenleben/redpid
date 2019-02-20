@@ -7,7 +7,7 @@ from devices import RedPitaya
 
 
 class Pitaya:
-    def __init__(self, host=None, user=None, password=None):
+    def __init__(self, host=None, user=None, password=None, N_zones=4):
         self.host = host
         self.user = user
         self.password = password
@@ -19,6 +19,8 @@ class Pitaya:
             'p': 0.01,
             'i': 1e-6
         }
+
+        self.N_zones = N_zones
 
     def connect(self):
         self.scpi = RedPitaya(self.host, delay_scpi_connection=True)
@@ -93,16 +95,16 @@ class Pitaya:
                 num += full
             return num
 
-        assert not self.pitaya.get('%s_run_algorithm'), \
+        assert not self.pitaya.get('%s_run_algorithm' % channel), \
             'write is only possible if algorithm is not running'
 
-        self.pitaya.set('%s_data_write', 1)
+        self.pitaya.set('%s_data_write' % channel, 1)
 
         for addr, v in enumerate(data):
             self.pitaya.set('%s_data_addr' % channel, addr)
             self.pitaya.set('%s_data_in' % channel, convert(v))
 
-        self.pitaya.set('%s_data_write', 0)
+        self.pitaya.set('%s_data_write' % channel, 0)
 
     def _read_sequence(self, N_bits, N_points):
         channel = 'control_loop_sequence_player'
@@ -165,22 +167,76 @@ class Pitaya:
         self.parameters['p'] = p
         self.write_registers()
 
-    def record_control(self, N_bits=14, N_points=16384):
-        self.pitaya.set('control_loop_sequence_player_recording', 1)
+    def record_control_now(self, N_bits=14, N_points=16384):
+        self.pitaya.set('control_loop_sequence_player_request_recording', 1)
         # just to be sure...
         sleep(0.001)
-        self.pitaya.set('control_loop_sequence_player_recording', 0)
+        self.pitaya.set('control_loop_sequence_player_request_recording', 0)
 
         measured_control = self._read_sequence(N_bits, N_points)
         return measured_control
 
-    def record_error_signal(self, N_points=16384):
-        self.pitaya.set('control_loop_sequence_player_recording', 1)
+    def record_error_signal_now(self, N_points=16384):
+        self.pitaya.set('control_loop_sequence_player_request_recording', 1)
         # just to be sure...
         sleep(0.001)
+        self.pitaya.set('control_loop_sequence_player_request_recording', 0)
 
         return self._read_error_signal(N_points)
 
     def sync(self):
         # just read something to wait for completion of all commands
         self.pitaya.get('dna_dna')
+
+    def set_enabled(self, enabled):
+        self.pitaya.set('control_loop_sequence_player_enabled', 1 if enabled else 0)
+
+    def set_algorithm(self, enabled):
+        self.pitaya.set('control_loop_sequence_player_run_algorithm', enabled)
+
+    def set_max_state(self, state):
+        self.pitaya.set('control_loop_sequence_player_max_state', state)
+
+    def set_curvature_filtering_starts(self, starts):
+        assert len(starts) == self.N_zones
+
+        for i, start in enumerate(starts):
+            if start is None:
+                continue
+
+            self.pitaya.set(
+                'control_loop_sequence_player_ff_curvature_filtering_start_%d' % i,
+                start
+            )
+
+    def set_ff_target_directions(self, directions):
+        assert len(directions) == self.N_zones
+
+        for i, direction in enumerate(directions):
+            assert direction in (1, -1, 0, None)
+            if direction is None:
+                continue
+
+            self.pitaya.set(
+                'control_loop_sequence_player_ff_direction_%d' % i,
+                direction
+            )
+
+    def set_ff_target_curvatures(self, curvatures):
+        assert len(curvatures) == self.N_zones
+
+        for i, curvature in enumerate(curvatures):
+            assert curvature in (1, -1, 0, None)
+            if curvature is None:
+                continue
+
+            self.pitaya.set(
+                'control_loop_sequence_player_ff_curvature_%d' % i,
+                curvature
+            )
+
+    def enable_channel_b_loop_through(self, enabled):
+        self.pitaya.set(
+            'control_loop_dy_sel',
+            self.pitaya.signal('control_loop_other_x' if enabled else 'zero')
+        )

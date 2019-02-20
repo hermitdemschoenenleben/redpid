@@ -1,4 +1,4 @@
-from migen import Module, Signal, If, bits_for, Array, Memory, ClockDomainsRenamer, Mux
+from migen import Module, Signal, If, bits_for, Array, Memory, ClockDomainsRenamer, Mux, ClockDomain
 from misoc.interconnect.csr import CSRStorage, AutoCSR, CSRStatus
 
 from .clock import ClockPlayer
@@ -41,7 +41,11 @@ class FeedForwardPlayer(Module, AutoCSR):
         self.stop_zone = CSRStorage(bits_for(N_zones))
 
         # should the feed forward and error signal be recorded?
-        self.recording = CSRStorage()
+        # this starts recording immediately
+        self.request_recording = CSRStorage()
+        # if the recording should not be started immediately but after a
+        # specific iteration of the algorithm, use this storage.
+        self.record_after = CSRStorage(20)
 
         # communication with the bus
         self.data_out = CSRStatus(self.N_bits)
@@ -102,7 +106,6 @@ class FeedForwardPlayer(Module, AutoCSR):
         # Submodules
         # Connections to and from submodules
 
-
         self.submodules.clock = ClockPlayer(self, N_points=N_points, N_zones=N_zones)
 
         self.counter = Signal.like(self.clock.counter)
@@ -110,6 +113,7 @@ class FeedForwardPlayer(Module, AutoCSR):
         self.current_zone = Signal.like(self.clock.current_zone)
         self.counter_in_zone = Signal.like(self.clock.counter_in_zone)
         self.current_zone_edge = Signal.like(self.clock.current_zone_edge)
+        self.iteration_counter = Signal.like(self.clock.iteration_counter)
 
         self.submodules.recorder = Recorder(self, N_bits=N_bits, N_points=N_points, N_zones=N_zones)
 
@@ -120,11 +124,13 @@ class FeedForwardPlayer(Module, AutoCSR):
             self.current_zone.eq(self.clock.current_zone),
             self.counter_in_zone.eq(self.clock.counter_in_zone),
             self.current_zone_edge.eq(self.clock.current_zone_edge),
+            self.iteration_counter.eq(self.clock.iteration_counter),
 
             # connections to clock
             self.clock.enabled.eq(self.enabled.storage),
             self.clock.request_stop.eq(self.request_stop.storage & (self.state == STATE_REPLAY)),
             self.clock.stop_zone.eq(self.stop_zone.storage),
+            self.clock.max_state.eq(self.max_state.storage),
             *[
                 self.clock.zone_edges[i].eq(self.zone_edges[i])
                 for i in range(self.N_zones - 1)
@@ -132,20 +138,22 @@ class FeedForwardPlayer(Module, AutoCSR):
 
             # connections to recorder
             self.recorder.current_zone.eq(self.current_zone),
-            self.recorder.recording.eq(self.recording.storage),
+            self.recorder.request_recording.eq(self.request_recording.storage),
             self.recorder.counter.eq(self.counter),
             self.recorder.run_algorithm.eq(self.run_algorithm.storage),
             self.recorder.data_out_addr.eq(self.data_out_addr.storage),
             self.recorder.error_signal_out_addr.eq(self.error_signal_out_addr.storage),
-
+            self.recorder.max_state.eq(self.max_state.storage),
+            self.recorder.iteration_counter.eq(self.iteration_counter),
+            self.recorder.record_after.eq(self.record_after.storage),
 
             # connections from recorder
             self.data_out.status.eq(self.recorder.data_out),
             self.error_signal_out.status.eq(self.recorder.error_signal_out)
         ]
 
-        # FIXME: ist das richtig, dass das sync und nicht comb ist?
-        self.sync += [
+        self.comb += [
+            self.clock.state.eq(self.state),
             self.recorder.state.eq(self.state)
         ]
 

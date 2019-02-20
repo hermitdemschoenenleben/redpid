@@ -1,13 +1,10 @@
-import json
 import numpy as np
 
 from time import sleep
 from matplotlib import pyplot as plt
 
-from utils import do, copy_file, counter_measurement, save_osci, \
-    REPLAY_SHIFT, N_BITS, LENGTH
+from utils import counter_measurement, save_osci, N_BITS, LENGTH
 from registers import Pitaya
-from process_control import process_control_data
 
 
 if __name__ == '__main__':
@@ -18,44 +15,40 @@ if __name__ == '__main__':
 
     datas = []
 
-    for wait in (3.5, 4.5, 5.5, 6.5):
-        print('wait', wait)
+    delays = [1000, 5000, 10000]
 
-        rp.pitaya.set('control_loop_sequence_player_run_algorithm', 0)
-        rp.pitaya.set('control_loop_sequence_player_enabled', 0)
+    #for wait in (3.5, 4.5, 5.5, 6.5):
+    for delay in delays:
+        print('delay', delay)
 
-        rp.pitaya.set('control_loop_sequence_player_ff_direction_0', -1)
-        rp.pitaya.set('control_loop_sequence_player_ff_direction_1', 1)
-        rp.pitaya.set('control_loop_sequence_player_ff_curvature_0', 1)
-        rp.pitaya.set('control_loop_sequence_player_ff_curvature_1', 1)
+        rp.set_algorithm(0)
+        rp.set_enabled(0)
+
+        rp.set_ff_target_directions([-1, 1, None, None])
+        rp.set_ff_target_curvatures([1, 1, None, None])
 
         first_feed_forward = np.array([0] * LENGTH)
-        #rp.set_feed_forward(first_feed_forward, N_BITS)
+        rp.set_feed_forward(first_feed_forward, N_BITS)
 
         rp.sync()
 
         rp.start_clock(LENGTH, .5, 1, None)
-        rp.pitaya.set('control_loop_dy_sel', rp.pitaya.signal('zero'))
-        #rp.pitaya.set('control_loop_dy_sel', rp.pitaya.signal('control_loop_other_x'))
+        rp.enable_channel_b_loop_through(0)
 
-        rp.pitaya.set('control_loop_sequence_player_mean_start', 100)
-        rp.pitaya.set('control_loop_sequence_player_max_state', 4)
+        rp.set_curvature_filtering_starts([1000, 1000, None, None])
+        #rp.set_max_state(4)
 
-        rp.pitaya.set('control_loop_sequence_player_enabled', 1)
+        rp.set_enabled(1)
         rp.pitaya.set('control_loop_sequence_player_keep_constant_at_end', 0)
-        rp.pitaya.set('control_loop_sequence_player_run_algorithm', 1)
+        rp.set_algorithm(1)
+        rp.pitaya.set('control_loop_sequence_player_record_after', delay)
 
-        rp.pitaya.set('root_sync_sequences_en', 1)
-        rp.pitaya.set('root_sync_sequences_en', 0)
-
-        asd
-        sleep(wait)
-        d = rp.record_control()
+        sleep(delay / 1000)
+        d = rp._read_sequence(N_bits=14, N_points=16384)
+        #d = rp.record_control_now()
         datas.append(d)
-        plt.plot(d, label=wait)
+        plt.plot(d, label=str(delay))
         plt.show()
-
-        asd
 
     plt.legend()
     plt.show()

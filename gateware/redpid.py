@@ -88,13 +88,10 @@ class Pid(Module):
         ])
 
         self.comb += [
-            #self.scopegen.gpio_trigger.eq(self.gpio_p.i[0]),
-            #self.scopegen.sweep_trigger_a.eq(self.fast_a.sweep.sweep.trigger),
-            #self.scopegen.sweep_trigger_b.eq(self.fast_b.sweep.sweep.trigger),
-
             self.control_loop.adc.eq(self.analog.adc_a),
             self.control_loop.other_adc.eq(self.analog.adc_b),
             self.analog.dac_a.eq(self.control_loop.dac),
+            self.analog.dac_b.eq(self.control_loop.sequence_player.iteration_counter),
             # self.slow_a.adc.eq(self.xadc.adc[0] << 4),
             # self.ds0.data.eq(self.slow_a.dac),
             # self.slow_b.adc.eq(self.xadc.adc[1] << 4),

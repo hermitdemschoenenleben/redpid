@@ -47,6 +47,125 @@ def testbench(player: FeedForwardPlayer, N_bits: int, N_points: int):
             yield
 
 
+def test_recording(player: FeedForwardPlayer, N_bits: int, N_points: int):
+    """Tests immediate recording via `request_recording`."""
+    yield player.enabled.storage.eq(1)
+    yield player.run_algorithm.storage.eq(1)
+    yield player.state.eq(3)
+    yield player.zone_edge_0.storage.eq(3)
+    yield player.zone_edge_1.storage.eq(-1)
+    yield player.zone_edge_2.storage.eq(-1)
+    yield player.request_recording.storage.eq(1)
+    yield player.max_state.storage.eq(6)
+    yield player.state.eq(6)
+    yield player.leading_counter.eq(N_points - 2)
+
+    player.comb += [
+        player.recorder.control_signal.eq(
+            player.value
+        )
+    ]
+
+    points = list(
+        v + 1 for v in
+        range(N_points)
+    )
+
+    for i, point in enumerate(points):
+        yield player.feedforward[i].eq(point)
+
+    # this records the error signal and counts the error signal counter up
+    for i in range(2 * N_points):
+        yield
+
+    recorded_data = []
+    for i in range(N_points):
+        v = yield player.recorder.recorded[i]
+        recorded_data.append(v)
+
+    assert recorded_data == points
+
+    # now replay some random stuff and check that recorded data is not
+    # influenced any more
+    for i in range(N_points):
+        yield player.feedforward[i].eq(randint(0, 1))
+
+    for i in range(N_points * 20):
+        yield
+
+    recorded_data = []
+    for i in range(N_points):
+        v = yield player.recorder.recorded[i]
+        recorded_data.append(v)
+
+    assert recorded_data == points
+
+
+def test_planned_recording(player: FeedForwardPlayer, N_bits: int, N_points: int):
+    """Tests planned recording via `record_after`."""
+    yield player.enabled.storage.eq(1)
+    yield player.run_algorithm.storage.eq(1)
+    yield player.state.eq(3)
+    yield player.zone_edge_0.storage.eq(3)
+    yield player.zone_edge_1.storage.eq(-1)
+    yield player.zone_edge_2.storage.eq(-1)
+    yield player.max_state.storage.eq(0)
+    yield player.state.eq(0)
+    yield player.leading_counter.eq(N_points - 2)
+
+    yield player.record_after.storage.eq(10)
+
+    player.comb += [
+        player.recorder.control_signal.eq(
+            player.value
+        )
+    ]
+
+    points = list(
+        v + 1 for v in
+        range(N_points)
+    )
+
+    for i, point in enumerate(points):
+        yield player.feedforward[i].eq(point)
+
+    # this records the error signal and counts the error signal counter up
+    for i in range(2 * N_points):
+        yield
+
+    recorded_data = []
+    for i in range(N_points):
+        v = yield player.recorder.recorded[i]
+        recorded_data.append(v)
+
+    assert recorded_data == [0] * N_points
+
+    for i in range(N_points * 20):
+        yield
+
+    recorded_data = []
+    for i in range(N_points):
+        v = yield player.recorder.recorded[i]
+        recorded_data.append(v)
+
+    assert recorded_data == points
+
+    # now replay some random stuff and check that recorded data is not
+    # influenced any more
+    for i in range(N_points):
+        yield player.feedforward[i].eq(randint(0, 1))
+
+    for i in range(N_points * 20):
+        yield
+
+    recorded_data = []
+    for i in range(N_points):
+        v = yield player.recorder.recorded[i]
+        recorded_data.append(v)
+
+    assert recorded_data == points
+
+
 def test_to_max(player: FeedForwardPlayer, N_bits: int, N_points: int):
     yield from player.enabled.write(1)
     yield from player.run_algorithm.write(1)
@@ -232,6 +351,13 @@ def test_stop(player: FeedForwardPlayer, N_bits: int, N_points: int):
 
 N_bits = 4
 N_points = 8
+
+player = FeedForwardPlayer(N_bits, N_points)
+run_simulation(player, test_recording(player, N_bits, N_points), vcd_name="feedforward_recording.vcd")
+
+player = FeedForwardPlayer(N_bits, N_points)
+run_simulation(player, test_planned_recording(player, N_bits, N_points), vcd_name="feedforward_planned_recording.vcd")
+
 """player = FeedForwardPlayer(N_bits, N_points)
 run_simulation(player, testbench(player, N_bits, N_points), vcd_name="feedforward.vcd")
 
@@ -252,7 +378,8 @@ run_simulation(player, test_direction_filtering(player, N_bits, N_points), vcd_n
 player = FeedForwardPlayer(N_bits, N_points)
 run_simulation(player, test_stop(player, N_bits, N_points), vcd_name="feedforward_stop.vcd")"""
 
-N_bits = 10
+"""N_bits = 10
 N_points = 32
 player = FeedForwardPlayer(N_bits, N_points)
-run_simulation(player, test_slope_filtering(player, N_bits, N_points), vcd_name="feedforward_slope.vcd")
+run_simulation(player, test_slope_filtering(player, N_bits, N_points), vcd_name="feedforward_slope.vcd")"""
+

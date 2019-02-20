@@ -16,7 +16,8 @@ class Recorder(Module):
         self.clone_signals(parent)
 
         self.create_memory()
-        self.record_output()
+        self.start_and_stop_recording()
+        self.do_recording()
         # communication with CPU via the bus
         self.feedforward_to_bus()
 
@@ -24,11 +25,14 @@ class Recorder(Module):
         # inputs
         self.state = Signal.like(parent.state)
         self.current_zone = Signal.like(parent.current_zone)
-        self.recording = Signal.like(parent.recording.storage)
+        self.request_recording = Signal.like(parent.request_recording.storage)
         self.counter = Signal.like(parent.counter)
         self.run_algorithm = Signal.like(parent.run_algorithm.storage)#
         self.data_out_addr = Signal.like(parent.data_out_addr.storage)
         self.error_signal_out_addr = Signal.like(parent.error_signal_out_addr.storage)
+        self.max_state = Signal.like(parent.max_state.storage)
+        self.iteration_counter = Signal.like(parent.iteration_counter)
+        self.record_after = Signal.like(parent.record_after.storage)
 
         # outputs
         self.data_out = Signal.like(parent.data_out.status)
@@ -50,7 +54,43 @@ class Recorder(Module):
             self.rec_error_signal_wrport, self.rec_error_signal_rdport
         ]
 
-    def record_output(self):
+    def start_and_stop_recording(self):
+        """Checks whether to start recording."""
+        self.recording = Signal()
+        self.recording_finished = Signal()
+
+        is_at_last_point = self.counter == self.N_points - 1
+        is_at_last_point_in_last_state = \
+            (self.state == self.max_state) \
+            & is_at_last_point
+
+        # handle requests for immediate recording
+        self.sync += [
+            If(self.request_recording & (~self.recording_finished)[0] & is_at_last_point_in_last_state,
+                self.recording.eq(1)
+            )
+        ]
+
+        # handle requests for recording after specific algorithm iteration
+        is_at_right_iteration = self.iteration_counter == self.record_after - 1
+        self.sync += [
+            If((self.record_after > 0) & is_at_last_point_in_last_state & is_at_right_iteration,
+                self.recording.eq(1)
+            )
+        ]
+
+        # stop recording at last point
+        self.sync += [
+            If(self.recording & is_at_last_point,
+                self.recording.eq(0),
+                self.recording_finished.eq(1)
+            ),
+            If((~self.request_recording)[0],
+                self.recording_finished.eq(0)
+            )
+        ]
+
+    def do_recording(self):
         """Records error and control signal over one cycle.
 
         Recording is activated if `recording` is True."""
@@ -92,26 +132,6 @@ class Recorder(Module):
                     es_counter.eq(0)
                     for es_counter in self.error_signal_counters
                 ]
-            )
-        ]
-
-        self.end_counter = Signal(2)
-
-        self.sync += [
-            If(self.recording,
-                If(self.counter == 0,
-                    self.end_counter.eq(self.end_counter + 1)
-                )
-            ).Else(
-                self.end_counter.eq(0)
-            )
-        ]
-
-        self.comb += [
-            If(self.recording,
-                If(self.end_counter == 2,
-                    self.parent.recording.storage.eq(0)
-                )
             )
         ]
 
