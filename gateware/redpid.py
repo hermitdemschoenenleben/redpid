@@ -30,13 +30,14 @@ from .xadc import XADC
 from .delta_sigma import DeltaSigma
 from .dna import DNA
 from .lfsr import XORSHIFTGen
+from .ttl import TTLPlayer
 
 
 class Pid(Module):
     def __init__(self, platform):
         csr_map = {
                 "dna": 28, "xadc": 29, "gpio_n": 30, "gpio_p": 31,
-                "control_loop": 0,
+                "control_loop": 0, "ttl": 1
                 #"slow_a": 2, "slow_b": 3, "slow_c": 4, "slow_d": 5,
                 #"scopegen": 6, "noise": 7,
         }
@@ -65,6 +66,14 @@ class Pid(Module):
 
         s, c = 25, 18
         self.submodules.control_loop = FastChain(14, s, c)
+        self.submodules.ttl = TTLPlayer(10)
+
+        self.comb += [
+            self.ttl.reset.eq(
+                (~self.control_loop.sequence_player.enabled.storage)[0]
+            )
+        ]
+
         #self.submodules.fast_b = FastChain(True, 14, s, c)
 
         sys_slow = ClockDomainsRenamer("sys_slow")
@@ -82,6 +91,7 @@ class Pid(Module):
 
         self.state_names, self.signal_names = cross_connect(self.gpio_n, [
             ("control_loop", self.control_loop),
+            ("ttl", self.ttl),
             #("slow_a", self.slow_a), ("slow_b", self.slow_b),
             #("slow_c", self.slow_c), ("slow_d", self.slow_d),
             #("scopegen", self.scopegen), ("noise", self.noise),
