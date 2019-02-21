@@ -15,15 +15,14 @@
 # You should have received a copy of the GNU General Public License
 # along with redpid.  If not, see <http://www.gnu.org/licenses/>.
 
-from migen import *
+from migen import Module, Signal, If, Array, Mux, ClockDomain, ClockDomainsRenamer, \
+    Cat, bits_for
 from misoc.interconnect.csr import AutoCSR, CSRStorage, CSRStatus, CSR
 
 from .iir import Iir
 from .limit import LimitCSR
-#from .sweep import SweepCSR
-#from .relock import Relock
-#from .modulate import Modulate, Demodulate
 from .clock import ClockPlayer
+from .decimation import Decimate
 from .feed_forward import FeedForwardPlayer
 
 
@@ -45,9 +44,6 @@ class FastChain(Module, AutoCSR):
         y_clear = Signal()
         y_sat = Signal()
         y_railed = Signal()
-        #relock = Signal()
-        #unlocked = Signal()
-        #sweep_trigger = Signal()
 
         clocks = []
         for N in range(N_zones):
@@ -95,8 +91,26 @@ class FastChain(Module, AutoCSR):
         #    width=width, step_width=24, step_shift=18)
         #self.submodules.mod = Modulate(width=width)
         self.submodules.y_limit = LimitCSR(width=width, guard=3)
-        self.submodules.sequence_player = FeedForwardPlayer(
-            N_bits=14, N_points=16384, N_zones=N_zones
+
+        max_decimation = 10
+        self.decimation = CSRStorage(max_decimation)
+
+        self.clock_domains.cd_decimated_clock = ClockDomain()
+        decimated_clock = ClockDomainsRenamer('decimated_clock')
+
+        sys_double = ClockDomainsRenamer("sys_double")
+        self.submodules.decimate = sys_double(Decimate(max_decimation))
+        self.comb += [
+            self.decimate.decimation.eq(self.decimation.storage),
+            self.cd_decimated_clock.clk.eq(
+                self.decimate.output
+            )
+        ]
+
+        self.submodules.sequence_player = decimated_clock(
+            FeedForwardPlayer(
+                N_bits=14, N_points=16384, N_zones=N_zones
+            )
         )
 
         ###

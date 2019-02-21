@@ -24,24 +24,29 @@ if __name__ == '__main__':
         rp.set_algorithm(0)
         rp.set_enabled(0)
 
-        rp.set_ff_target_directions([-1, 1, None, None])
-        rp.set_ff_target_curvatures([1, 1, None, None])
+        rp.set_target_frequencies([6000, 150, 25, None])
+        rp.set_max_state(4)
+        rp.set_ff_target_curvatures([1, 1, 1, 1])
 
         first_feed_forward = np.array([0] * LENGTH)
         rp.set_feed_forward(first_feed_forward, N_BITS)
 
         rp.sync()
 
-        rp.start_clock(LENGTH, .5, 1, None)
+        rp.start_clock(LENGTH, .3, .6, 1)
         rp.enable_channel_b_loop_through(0)
 
-        rp.set_curvature_filtering_starts([1000, 1000, None, None])
+        rp.set_curvature_filtering_starts([100, 100, 100, None])
         #rp.set_max_state(4)
 
+        #input('WAIT!')
         rp.set_enabled(1)
         rp.pitaya.set('control_loop_sequence_player_keep_constant_at_end', 0)
         rp.set_algorithm(1)
         rp.pitaya.set('control_loop_sequence_player_record_after', delay)
+
+        rp.pitaya.set('control_loop_decimation', 0)
+        asd
 
         sleep(delay / 1000)
         d = rp._read_sequence(N_bits=14, N_points=16384)

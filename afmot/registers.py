@@ -54,16 +54,16 @@ class Pitaya:
             gpio_p_oes=0xff,
             gpio_p_outs=0x0,
             gpio_n_oes=0xff,
-            gpio_n_outs=0b1,
+            gpio_n_outs=0b0,
 
-            gpio_n_do1_en=self.pitaya.states('control_loop_clock_0'),
-            gpio_n_do2_en=self.pitaya.states(),
-            gpio_n_do3_en=self.pitaya.states(),
+            gpio_n_do0_en=self.pitaya.states('control_loop_clock_0'),
+            gpio_n_do1_en=self.pitaya.states('control_loop_clock_1'),
+            gpio_n_do2_en=self.pitaya.states('control_loop_clock_2'),
+            gpio_n_do3_en=self.pitaya.states('control_loop_clock_3'),
             gpio_n_do4_en=self.pitaya.states(),
             #gpio_n_do2_en=self.pitaya.states('control_loop_clock_1'),
             #gpio_n_do3_en=self.pitaya.states('control_loop_clock_2'),
             #gpio_n_do4_en=self.pitaya.states('control_loop_clock_3'),
-            gpio_n_do0_en=self.pitaya.states()
         )
 
         # filter out values that did not change
@@ -240,3 +240,23 @@ class Pitaya:
             'control_loop_dy_sel',
             self.pitaya.signal('control_loop_other_x' if enabled else 'zero')
         )
+
+    def set_target_frequencies(self, frequencies):
+        assert len(frequencies) == self.N_zones
+        directions = []
+
+        last = [f for f in frequencies if f is not None][-1]
+        frequencies = [last] + frequencies
+
+        for idx in range(4):
+            previous = frequencies[idx]
+            current = frequencies[idx + 1]
+
+            if current is None or previous is None:
+                directions.append(None)
+            else:
+                directions.append(
+                    -1 if (current > previous) else 1
+                )
+
+        self.set_ff_target_directions(directions)
