@@ -75,7 +75,7 @@ def test_recording(player: FeedForwardPlayer, N_bits: int, N_points: int):
         yield player.feedforward[i].eq(point)
 
     # this records the error signal and counts the error signal counter up
-    for i in range(2 * N_points):
+    for i in range(3 * N_points):
         yield
 
     recorded_data = []
@@ -112,7 +112,6 @@ def test_planned_recording(player: FeedForwardPlayer, N_bits: int, N_points: int
     yield player.max_state.storage.eq(0)
     yield player.state.eq(0)
     yield player.leading_counter.eq(N_points - 2)
-
     yield player.record_after.storage.eq(10)
 
     player.comb += [
@@ -147,6 +146,7 @@ def test_planned_recording(player: FeedForwardPlayer, N_bits: int, N_points: int
     for i in range(N_points):
         v = yield player.recorder.recorded[i]
         recorded_data.append(v)
+
 
     assert recorded_data == points
 

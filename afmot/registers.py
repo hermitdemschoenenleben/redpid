@@ -20,6 +20,9 @@ class Pitaya:
             'i': 1e-6
         }
 
+        self.N_points = 16384
+        self.N_bits = 14
+
         self.N_zones = N_zones
 
     def connect(self):
@@ -61,9 +64,7 @@ class Pitaya:
             gpio_n_do2_en=self.pitaya.states('control_loop_clock_2'),
             gpio_n_do3_en=self.pitaya.states('control_loop_clock_3'),
             gpio_n_do4_en=self.pitaya.states(),
-            #gpio_n_do2_en=self.pitaya.states('control_loop_clock_1'),
-            #gpio_n_do3_en=self.pitaya.states('control_loop_clock_2'),
-            #gpio_n_do4_en=self.pitaya.states('control_loop_clock_3'),
+            gpio_n_do5_en=self.pitaya.states(),
         )
 
         # filter out values that did not change
@@ -85,10 +86,36 @@ class Pitaya:
         self.pitaya.set_iir("control_loop_iir_a", *make_filter('P', k=self.parameters['p']))
         self.pitaya.set_iir("control_loop_iir_c", *make_filter('I', f=10, k=.1))
 
-    def _write_sequence(self, data, N_bits):
+    def init(self, decimation=0, N_zones=2, relative_length=1,
+             zone_edges=[0.5, 1, None, None], target_frequencies=[1000, 2000],
+             curvature_filtering_starts=[100, 100, 100, None]
+             ):
+        self.start_clock(self.N_points, *[
+            int((self.N_points - 1) * relative_length * edge)
+            if edge is not None
+            else None
+            for edge in zone_edges
+        ])
+        self.pitaya.set(
+            'control_loop_sequence_player_last_point',
+            int(relative_length * (self.N_points - 1))
+        )
+        self.set_target_frequencies(target_frequencies)
+        self.set_ff_target_curvatures([1, 1, 1, 1])
+        self.set_curvature_filtering_starts(curvature_filtering_starts)
+
+        self.pitaya.set('control_loop_decimation', decimation)
+        self.pitaya.set('control_loop_sequence_player_keep_constant_at_end', 0)
+
+        self.enable_channel_b_loop_through(0)
+
+        self.write_registers()
+
+
+    def _write_sequence(self, data):
         channel = 'control_loop_sequence_player'
 
-        max_ = 1<<(N_bits - 1)
+        max_ = 1<<(self.N_bits - 1)
         full = 2 * max_
         def convert(num):
             if num < 0:
@@ -106,13 +133,16 @@ class Pitaya:
 
         self.pitaya.set('%s_data_write' % channel, 0)
 
-    def _read_sequence(self, N_bits, N_points):
+    def read_control_signal(self, addresses=None):
         channel = 'control_loop_sequence_player'
 
         data = []
 
+        if addresses is None:
+            addresses = range(self.N_points)
+
         with self.pitaya.batch_reads:
-            for address in range(N_points):
+            for address in addresses:
                 self.pitaya.set('%s_data_out_addr' % channel, address)
                 data.append(self.pitaya.get('%s_data_out' % channel))
 
@@ -120,7 +150,7 @@ class Pitaya:
         data = [int(_) for _ in data]
 
         # data contains only positive numbers --> rescale
-        max_ = 1<<(N_bits - 1)
+        max_ = 1<<(self.N_bits - 1)
         full = 2 * max_
 
         # there's a delay of several cycles in the recording of the data inside the FPGA
@@ -134,13 +164,16 @@ class Pitaya:
 
         return data
 
-    def _read_error_signal(self, N_points):
+    def read_error_signal(self, addresses=None):
         channel = 'control_loop_sequence_player'
 
         data = []
 
+        if addresses is None:
+            addresses = range(self.N_points)
+
         with self.pitaya.batch_reads:
-            for address in range(N_points):
+            for address in addresses:
                 self.pitaya.set('%s_error_signal_out_addr' % channel, address)
                 data.append(self.pitaya.get('%s_error_signal_out' % channel))
 
@@ -155,34 +188,26 @@ class Pitaya:
         for i, end in enumerate((end0, end1, end2)):
             self.pitaya.set(
                 '%s_zone_edge_%d' % (channel, i),
-                int(length * end) if end is not None else -1
+                end if end is not None else -1
             )
 
         self.pitaya.set('%s_enabled' % channel, 1)
 
-    def set_feed_forward(self, feedforward, N_bits):
-        self._write_sequence(feedforward, N_bits)
+    def set_feed_forward(self, feedforward):
+        self._write_sequence(feedforward)
 
     def set_proportional(self, p):
         self.parameters['p'] = p
         self.write_registers()
 
-    def record_control_now(self, N_bits=14, N_points=16384):
+    def record_now(self):
         self.pitaya.set('control_loop_sequence_player_request_recording', 1)
         # just to be sure...
         sleep(0.001)
         self.pitaya.set('control_loop_sequence_player_request_recording', 0)
 
-        measured_control = self._read_sequence(N_bits, N_points)
-        return measured_control
-
-    def record_error_signal_now(self, N_points=16384):
-        self.pitaya.set('control_loop_sequence_player_request_recording', 1)
-        # just to be sure...
-        sleep(0.001)
-        self.pitaya.set('control_loop_sequence_player_request_recording', 0)
-
-        return self._read_error_signal(N_points)
+    def schedule_recording_after(self, delay):
+        self.pitaya.set('control_loop_sequence_player_record_after', delay)
 
     def sync(self):
         # just read something to wait for completion of all commands
@@ -240,6 +265,17 @@ class Pitaya:
             'control_loop_dy_sel',
             self.pitaya.signal('control_loop_other_x' if enabled else 'zero')
         )
+
+    def enable_channel_b_pid(self, enabled, p=None, i=None, reset=True):
+        self.pitaya.set(
+            'control_loop_dy_sel',
+            self.pitaya.signal('control_loop_pid_out' if enabled else 'zero')
+        )
+        self.pitaya.set('control_loop_pid_reset', 1 if reset else 0)
+        if p is not None:
+            self.pitaya.set('control_loop_pid_kp', p)
+        if i is not None:
+            self.pitaya.set('control_loop_pid_ki', i)
 
     def set_target_frequencies(self, frequencies):
         assert len(frequencies) == self.N_zones

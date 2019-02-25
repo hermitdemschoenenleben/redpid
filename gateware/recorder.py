@@ -33,6 +33,7 @@ class Recorder(Module):
         self.max_state = Signal.like(parent.max_state.storage)
         self.iteration_counter = Signal.like(parent.iteration_counter)
         self.record_after = Signal.like(parent.record_after.storage)
+        self.last_point = Signal.like(parent.last_point.storage)
 
         # outputs
         self.data_out = Signal.like(parent.data_out.status)
@@ -59,7 +60,7 @@ class Recorder(Module):
         self.recording = Signal()
         self.recording_finished = Signal()
 
-        is_at_last_point = self.counter == self.N_points - 1
+        is_at_last_point = self.counter == self.last_point
         is_at_last_point_in_last_state = \
             (self.state == self.max_state) \
             & is_at_last_point

@@ -20,6 +20,7 @@ from migen import Module, Signal, If, Array, Mux, ClockDomain, ClockDomainsRenam
 from misoc.interconnect.csr import AutoCSR, CSRStorage, CSRStatus, CSR
 
 from .iir import Iir
+from .pid import PID
 from .limit import LimitCSR
 from .clock import ClockPlayer
 from .decimation import Decimate
@@ -31,6 +32,8 @@ class FastChain(Module, AutoCSR):
         self.adc = Signal((width, True))
         self.other_adc = Signal((width, True))
         self.dac = Signal((width, True))
+
+        s = signal_width - width
 
         self.x_tap = CSRStorage(2)
         self.brk = CSRStorage(1)
@@ -58,15 +61,22 @@ class FastChain(Module, AutoCSR):
 
         x = Signal((signal_width, True))
         other_x = Signal((signal_width, True))
+        pid_out = Signal((signal_width, True))
         dx = Signal((signal_width, True))
         y = Signal((signal_width, True))
         dy = Signal((signal_width, True))
         rx = Signal((signal_width, True))
 
         self.signal_in = dx, dy, rx
-        self.signal_out = x, y, other_x#, sweep_trigger
+        self.signal_out = x, y, other_x, pid_out#, sweep_trigger
 
         ###
+
+        self.submodules.pid = PID()
+        self.comb += [
+            self.pid.input.eq(self.other_adc),
+            pid_out.eq(self.pid.pid_out)
+        ]
 
         self.submodules.iir_a = Iir(
             width=signal_width, coeff_width=coeff_width, shift=coeff_width-2,
@@ -115,7 +125,6 @@ class FastChain(Module, AutoCSR):
 
         ###
 
-        s = signal_width - width
         s1 = 2*coeff_width - width
         s2 = 2*coeff_width - signal_width
         self.comb += [

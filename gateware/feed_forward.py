@@ -23,7 +23,6 @@ class FeedForwardPlayer(Module, AutoCSR):
         self.N_zones = N_zones
         self.N_address_bits = bits_for(self.N_points - 1)
 
-        self.last_point = self.N_points - 1
         self.max_pos = (1<<(self.N_bits - 1)) - 1
         self.max_neg = -1 * self.max_pos - 1
 
@@ -35,6 +34,7 @@ class FeedForwardPlayer(Module, AutoCSR):
         self.run_algorithm = CSRStorage()
         # up to which state should the state machine go in each cycle?
         self.max_state = CSRStorage(10, reset=STATE_REPLAY_FILTER_CURVATURE)
+        self.last_point = CSRStorage(bits_for(N_points - 1), reset=N_points - 1)
 
         # request a stop at a specific zone
         self.request_stop = CSRStorage()
@@ -131,6 +131,7 @@ class FeedForwardPlayer(Module, AutoCSR):
             self.clock.request_stop.eq(self.request_stop.storage & (self.state == STATE_REPLAY)),
             self.clock.stop_zone.eq(self.stop_zone.storage),
             self.clock.max_state.eq(self.max_state.storage),
+            self.clock.last_point.eq(self.last_point.storage),
             *[
                 self.clock.zone_edges[i].eq(self.zone_edges[i])
                 for i in range(self.N_zones - 1)
@@ -146,6 +147,7 @@ class FeedForwardPlayer(Module, AutoCSR):
             self.recorder.max_state.eq(self.max_state.storage),
             self.recorder.iteration_counter.eq(self.iteration_counter),
             self.recorder.record_after.eq(self.record_after.storage),
+            self.recorder.last_point.eq(self.last_point.storage),
 
             # connections from recorder
             self.data_out.status.eq(self.recorder.data_out),
@@ -193,7 +195,7 @@ class FeedForwardPlayer(Module, AutoCSR):
         """Updates the status of the state machine when one cycle is completed."""
         self.sync += [
             If(self.run_algorithm.storage,
-                If(self.counter == self.last_point,
+                If(self.counter == self.last_point.storage,
                     If(self.state == self.max_state.storage,
                         self.state.eq(STATE_REPLAY)
                     ).Else(
@@ -231,7 +233,7 @@ class FeedForwardPlayer(Module, AutoCSR):
 
             If(self.run_algorithm.storage,
                 If(self.state == STATE_REPLAY_ADJUST,
-                    If(self.counter == self.last_point,
+                    If(self.counter == self.last_point.storage,
                         self.adjustment_counter.eq(self.adjustment_counter + 1),
                         If(self.adjustment_counter == self.decrease_step_size_after.storage,
                             self.adjustment_counter.eq(0),
@@ -297,7 +299,7 @@ class FeedForwardPlayer(Module, AutoCSR):
         sign = self.current_ff_direction
 
         self.sync += [
-            If((self.state == STATE_REPLAY_FILTER_DIRECTION - 1) & (self.counter == self.last_point),
+            If((self.state == STATE_REPLAY_FILTER_DIRECTION - 1) & (self.counter == self.last_point.storage),
                 *[
                     zone_bound.eq(initial)
                     for zone_bound in self.zone_bounds

@@ -32,10 +32,14 @@ class ClockPlayer(Module):
         self.stop_zone = Signal.like(parent.stop_zone.storage)
         self.state = Signal.like(parent.state)
         self.max_state = Signal.like(parent.max_state.storage)
+        self.last_point = Signal.like(parent.last_point.storage)
 
     def run_counter(self):
         self.leading_counter = Signal(bits_for(self.N_points - 1))
         self.counter = Signal.like(self.leading_counter)
+
+        counter_before = Signal.like(self.leading_counter)
+        counter_before_2 = Signal.like(self.leading_counter)
 
         self.sync += [
             If(self.request_stop & (self.current_zone == self.stop_zone) & (self.counter == self.current_zone_edge - 3),
@@ -43,20 +47,25 @@ class ClockPlayer(Module):
             ),
             If(((~self.stopped) & 0b1),
                 If(self.enabled,
-                    self.leading_counter.eq(self.leading_counter + 1),
-                    self.counter.eq(self.leading_counter - 2)
+                    If(self.leading_counter == self.last_point,
+                        self.leading_counter.eq(0)
+                    ).Else(
+                        self.leading_counter.eq(self.leading_counter + 1),
+                    ),
                 ).Else(
                     self.leading_counter.eq(0),
-                    self.counter.eq(0),
                 )
-            )
+            ),
+            counter_before.eq(self.leading_counter),
+            counter_before_2.eq(counter_before),
+            self.counter.eq(counter_before_2)
         ]
 
     def play_clock(self):
         self.iteration_counter = Signal(20)
 
         counter_is_at_zone_edge = self.counter == self.current_zone_edge
-        counter_is_at_last_point = self.counter == self.N_points - 1
+        counter_is_at_last_point = self.counter == self.last_point
 
         self.counter_in_zone = Signal(bits_for(self.N_points))
 
