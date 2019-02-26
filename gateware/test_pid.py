@@ -81,31 +81,34 @@ def test_p(dut, width):
 
 
 def test_i(dut, width):
-    yield dut.ki.storage.eq(3000)
-    yield dut.input.eq(1623)
+    yield dut.kd.storage.eq(10)
 
-    for i in range(500):
+    for i in range(20):
+        yield dut.input.eq(i * 15)
         yield
 
         out = yield dut.pid_out
-        ki_mult = yield dut.ki_mult
-        error = yield dut.error
-        int_sum = yield dut.int_sum
-        int_reg = yield dut.int_reg
-        int_sum_sign = yield dut.int_sum[-1]
-        int_sum_last = yield dut.int_sum[-2]
-        print('sign', int_sum_sign, 'last', int_sum_last)
-        print('int_sum', bin(int_sum))
-        #print('int_reg', int_reg)
-        print('out', out)
-        print('int_reg', bin(int_reg))
-        print('')
 
-        if out < 0:
-            break
+        print('out', out)
+
+
+def test_d(dut, width):
+    yield dut.kd.storage.eq(4096)
+
+    for i in range(20):
+        yield dut.input.eq(i ** 2)
+        yield
+
+        out = yield dut.pid_out
+
+        print('out', out)
+
+
 
 width = 14
 pid = PID(width=width)
 run_simulation(pid, test_p(pid, width))
 pid = PID(width=width)
 run_simulation(pid, test_i(pid, width))
+pid = PID(width=width)
+run_simulation(pid, test_d(pid, width))

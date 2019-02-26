@@ -15,6 +15,7 @@ class PID(Module, AutoCSR):
         self.calculate_error_signal()
         self.calculate_p()
         self.calculate_i()
+        self.calculate_d()
         self.calculate_sum()
 
     def calculate_error_signal(self):
@@ -95,6 +96,26 @@ class PID(Module, AutoCSR):
             )
         ]
 
+    def calculate_d(self):
+        self.kd = CSRStorage(self.width)
+        kd_mult = Signal((29, True))
+        kd_reg = Signal((19, True))
+        kd_reg_r = Signal((19, True))
+        self.kd_reg_s = Signal((20, True))
+        kd_signed = Signal((self.width, True))
+
+        self.comb += [
+            kd_signed.eq(self.kd.storage),
+            kd_mult.eq(self.error * kd_signed)
+        ]
+
+        self.sync += [
+            kd_reg.eq(kd_mult[10:29]),
+            kd_reg_r.eq(kd_reg),
+            self.kd_reg_s.eq(kd_reg - kd_reg_r)
+        ]
+
+
     def calculate_sum(self):
         self.pid_sum = Signal((33, True))
         self.pid_out = Signal((self.width, True))
@@ -119,6 +140,6 @@ class PID(Module, AutoCSR):
 
         self.comb += [
             self.pid_sum.eq(
-                self.output_p + self.int_shr
+                self.output_p + self.int_shr + self.kd_reg_s
             )
         ]
