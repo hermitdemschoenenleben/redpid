@@ -80,7 +80,6 @@ class Pitaya:
 
         for k, v in new.items():
             self.pitaya.set(k, int(v))
-            print('SET', k, int(v))
 
         # set PI parameters
         self.pitaya.set_iir("control_loop_iir_a", *make_filter('P', k=self.parameters['p']))
@@ -203,7 +202,7 @@ class Pitaya:
     def record_now(self):
         self.pitaya.set('control_loop_sequence_player_request_recording', 1)
         # just to be sure...
-        sleep(0.001)
+        sleep(0.1)
         self.pitaya.set('control_loop_sequence_player_request_recording', 0)
 
     def schedule_recording_after(self, delay):
@@ -266,7 +265,7 @@ class Pitaya:
             self.pitaya.signal('control_loop_other_x' if enabled else 'zero')
         )
 
-    def enable_channel_b_pid(self, enabled, p=None, i=None, reset=True):
+    def enable_channel_b_pid(self, enabled, p=None, i=None, d=None, reset=True):
         self.pitaya.set(
             'control_loop_dy_sel',
             self.pitaya.signal('control_loop_pid_out' if enabled else 'zero')
@@ -276,6 +275,8 @@ class Pitaya:
             self.pitaya.set('control_loop_pid_kp', p)
         if i is not None:
             self.pitaya.set('control_loop_pid_ki', i)
+        if d is not None:
+            self.pitaya.set('control_loop_pid_kd', d)
 
     def set_target_frequencies(self, frequencies):
         assert len(frequencies) == self.N_zones

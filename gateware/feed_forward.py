@@ -32,12 +32,15 @@ class FeedForwardPlayer(Module, AutoCSR):
         self.enabled = CSRStorage()
         # should the algorithm for continuous feed forward improvement run?
         self.run_algorithm = CSRStorage()
+        self.stop_algorithm_after = CSRStorage(20, reset=(1<<20) - 1)
+        self.algorithm_running = Signal()
         # up to which state should the state machine go in each cycle?
         self.max_state = CSRStorage(10, reset=STATE_REPLAY_FILTER_CURVATURE)
         self.last_point = CSRStorage(bits_for(N_points - 1), reset=N_points - 1)
 
         # request a stop at a specific zone
         self.request_stop = CSRStorage()
+        self.stop_after = CSRStorage(20, reset=(1<<20) - 1)
         self.stop_zone = CSRStorage(bits_for(N_zones))
 
         # should the feed forward and error signal be recorded?
@@ -118,6 +121,12 @@ class FeedForwardPlayer(Module, AutoCSR):
         self.submodules.recorder = Recorder(self, N_bits=N_bits, N_points=N_points, N_zones=N_zones)
 
         self.comb += [
+            self.algorithm_running.eq(
+                self.run_algorithm.storage  & (
+                    (self.iteration_counter <= self.stop_algorithm_after.storage)
+                )
+            ),
+
             # connections from clock
             self.counter.eq(self.clock.counter),
             self.leading_counter.eq(self.clock.leading_counter),
@@ -128,7 +137,10 @@ class FeedForwardPlayer(Module, AutoCSR):
 
             # connections to clock
             self.clock.enabled.eq(self.enabled.storage),
-            self.clock.request_stop.eq(self.request_stop.storage & (self.state == STATE_REPLAY)),
+            self.clock.request_stop.eq(
+                (self.request_stop.storage & (self.state == STATE_REPLAY))
+                | (self.iteration_counter > self.stop_after.storage)
+            ) ,
             self.clock.stop_zone.eq(self.stop_zone.storage),
             self.clock.max_state.eq(self.max_state.storage),
             self.clock.last_point.eq(self.last_point.storage),
@@ -141,7 +153,7 @@ class FeedForwardPlayer(Module, AutoCSR):
             self.recorder.current_zone.eq(self.current_zone),
             self.recorder.request_recording.eq(self.request_recording.storage),
             self.recorder.counter.eq(self.counter),
-            self.recorder.run_algorithm.eq(self.run_algorithm.storage),
+            self.recorder.run_algorithm.eq(self.algorithm_running),
             self.recorder.data_out_addr.eq(self.data_out_addr.storage),
             self.recorder.error_signal_out_addr.eq(self.error_signal_out_addr.storage),
             self.recorder.max_state.eq(self.max_state.storage),
@@ -170,7 +182,7 @@ class FeedForwardPlayer(Module, AutoCSR):
         self.bus_to_feedforward()
 
         self.sync += [
-            If(self.run_algorithm.storage,
+            If(self.algorithm_running,
                 self.ff_wrport.we.eq(
                     self.ff_adjustment_we
                     | self.ff_slope_filter_we
@@ -194,7 +206,7 @@ class FeedForwardPlayer(Module, AutoCSR):
     def update_status(self):
         """Updates the status of the state machine when one cycle is completed."""
         self.sync += [
-            If(self.run_algorithm.storage,
+            If(self.algorithm_running,
                 If(self.counter == self.last_point.storage,
                     If(self.state == self.max_state.storage,
                         self.state.eq(STATE_REPLAY)
@@ -226,12 +238,12 @@ class FeedForwardPlayer(Module, AutoCSR):
         self.sync += [
             self.actual_step_size.eq(self.step_size.storage >> step_size_shift),
             # read error signal from memory
-            If(self.run_algorithm.storage,
+            If(self.algorithm_running,
                 self.recorder.rec_error_signal_rdport.adr.eq(self.leading_counter),
                 current_error_signal.eq(self.recorder.rec_error_signal_rdport.dat_r),
             ),
 
-            If(self.run_algorithm.storage,
+            If(self.algorithm_running,
                 If(self.state == STATE_REPLAY_ADJUST,
                     If(self.counter == self.last_point.storage,
                         self.adjustment_counter.eq(self.adjustment_counter + 1),
@@ -379,7 +391,7 @@ class FeedForwardPlayer(Module, AutoCSR):
     def bus_to_feedforward(self):
         """Loads a feed forward signal from CPU."""
         self.sync += [
-            If(~self.run_algorithm.storage,
+            If((~self.algorithm_running)[0],
                 self.ff_wrport.we.eq(
                     self.data_write.storage
                 ),

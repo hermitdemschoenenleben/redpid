@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import subprocess
 from os import path
@@ -25,16 +26,18 @@ def counter_measurement():
     return list(float(f) for f in d)
 
 
-def save_osci(filename):
+def _get_osci():
     import vxi11
-    import time
-    scope = vxi11.Instrument('141.20.47.204')
+    scope = vxi11.Instrument('192.168.0.89')
     scope.timeout = 10000
-
     while '1' in scope.ask('BUSY?'):
         # is still writing to disk, probably
         print('busy')
         time.sleep(0.5)
+    return scope
+
+def arm_osci():
+    scope = _get_osci()
 
     scope.write('SAVE:WAVEFORM:FILEFORMAT SPREADSHEETC')
     scope.write('SAVE:WAVEFORM:SPREADSHEET:RESOLUTION FULL')
@@ -42,12 +45,16 @@ def save_osci(filename):
     scope.write('ACQ:STOPA SEQ')
 
     scope.write('ACQ:STATE ON')
-    #time.sleep(1)
-    #scope.write('TRIG')
+
+def save_osci(filename, force_trigger=False):
+    scope = _get_osci()
+
+    if force_trigger:
+        scope.write('TRIG')
 
     while '1' in scope.ask('ACQ:STATE?'):
         print('wait')
-        time.sleep(0.5)
+        time.sleep(1)
 
-    scope.write('SAVE:WAVEFORM ALL, "E:/%s"' % filename)
+    scope.write('SAVE:WAVEFORM ALL, "C:/Documents and Settings/TekScope_Local_Admin/Desktop/Ben/%s"' % filename)
 
