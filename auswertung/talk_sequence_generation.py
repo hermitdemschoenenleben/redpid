@@ -2,6 +2,7 @@ import pickle
 import numpy as np
 import subprocess
 from matplotlib import pyplot as plt
+from matplotlib import gridspec
 from osci_to_frequency import do
 
 import seaborn as sns
@@ -9,6 +10,8 @@ sns.set_context("talk", font_scale=0.8)
 #sns.set()
 
 LENGTH = 131.072e-6
+
+gs = gridspec.GridSpec(2, 1, height_ratios=[1.5, 2.5])
 
 def iterate_over_control_signals(folder):
     filename = folder + 'control-signal.pickle'
@@ -29,6 +32,9 @@ def iterate_over_control_signals(folder):
     for i, d in enumerate(control):
         # convert to volt
         d = [c / 8192 for c in d]
+        d = [
+            125 - (v * 50) for v in d
+        ]
 
         yield (times, d)
 
@@ -61,40 +67,81 @@ def iterate_over_frequencies(folder):
 
 
 def plot_control_signal_and_frequencies(folder):
+    time_length = 190
+
     for i, [[times_c, control], [times_f, frequencies]] in enumerate(zip(
             iterate_over_control_signals(folder),
             iterate_over_frequencies(folder + 'frequencies/')
     )):
         # plot control signal
-        ax = plt.subplot(2, 1, 1)
+        ax = plt.subplot(gs[0])
 
-        plt.grid()
-        plt.plot(times_c, control)
-        plt.ylim((-1.1, 1.1))
-        plt.xlim((0, 131))
+        #plt.grid()
+        ax.xaxis.grid(True)
+        plt.plot(times_c + [_ + times_c[-1] for _ in times_c], control * 2)
+        plt.ylim((60, 190))
+        plt.xlim((0, time_length))
         #plt.xticks(time_ticks)
         #plt.xlim((0, LENGTH / 1e-6))
-        plt.yticks((-1, -.5, 0, .5, 1))
+        plt.yticks((75, 100, 125, 150, 175))
         plt.xticks(visible=False)
 
-        plt.ylabel('control sig. in V')
+        plt.ylabel('inj. current in mA')
         #plt.tight_layout()
 
         # plot frequencies
-        ax = plt.subplot(2, 1, 2)
+        ax = plt.subplot(gs[1])
         ax.get_yaxis().set_label_coords(-.08,0.5)
-        plt.grid()
+        ax.xaxis.grid(True)
+        #plt.grid()
 
         plt.xlabel('time in us')
         plt.ylabel('beat note in GHz')
-        len_f = int(len(times_f) / 200 * 131)
+        len_f = int(len(times_f) / 200 * time_length)
         shift = 9
+
+        plt.plot((-1000, 10000), (6.835, 6.835), 'k--')
+        plt.plot((-1000, 10000), (.25, .25), 'k--')
+
         plt.plot(times_f[:len_f], frequencies[shift:shift + len_f])
-        plt.ylim((0, 7))
-        plt.xlim((0, 131))
+        plt.ylim((-0.5, 7.5))
+        plt.xlim((0, time_length))
 
 
         fn = ('000000' + str(i))[-5:]
+
+
+        def figsize(ratio=1.33, figwidth=None, figheigth=None):
+            """
+            Returns a tuple for setting the figsize argument of matplotlib's subfigure
+            function.
+
+            Parameters
+            ----------
+            ratio : float (default 1.33)
+                The ratio figwidth / fighheight. Default is 4/3
+            figwidth, fighheight : (optional)
+                Figure width or height in inches. Either one can be set and the other
+                one will be set based on `ratio`. If none are given, the current global
+                value of the figure width will be used.
+
+            Returns
+            -------
+            (figwidth, figheigth) : tuple
+            """
+            if not figwidth is None:
+                figheigth = figwidth / ratio
+            elif not figheigth is None:
+                figwidth = figheigth * ratio
+            if (figwidth is None) and (figheigth is None):
+                figwidth = plt.rcParams['figure.figsize'][0]
+                figheigth = figwidth / ratio
+
+            return (figwidth, figheigth)
+
+        plt.gcf().set_size_inches(*figsize(1))
+
+
         plt.tight_layout()
         plt.savefig(folder + 'exported/%s.png' % fn)
         plt.clf()
@@ -102,7 +149,7 @@ def plot_control_signal_and_frequencies(folder):
 
 def images_to_mp4(folder):
     subprocess.Popen(
-        'ffmpeg -framerate 40 -i %s/exported/%%05d.png -c:v libx264 -profile:v high '
+        'ffmpeg -y -framerate 40 -i %s/exported/%%05d.png -c:v libx264 -profile:v high '
         '-crf 20 -pix_fmt yuv420p %s/output.mp4' % (folder, folder),
         shell=True
     )
