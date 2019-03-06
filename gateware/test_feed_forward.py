@@ -349,8 +349,43 @@ def test_stop(player: FeedForwardPlayer, N_bits: int, N_points: int):
             yield
 
 
+def test_planned_stop(player: FeedForwardPlayer, N_bits: int, N_points: int):
+    # FIXME: test is not tested yet ;)
+    yield from player.enabled.write(1)
+    yield from player.run_algorithm.write(1)
+    yield player.state.eq(3)
+    yield from player.zone_edge_0.write(int(N_points / 2) - 1)
+    yield from player.zone_edge_1.write(-1)
+    yield from player.zone_edge_2.write(-1)
+    yield from player.stop_zone.write(1)
+    yield from player.stop_after.write(2)
+
+    points = list(range(N_points))
+
+    def gen_val(i):
+        return i
+
+    for i in points:
+        yield player.feedforward[i].eq(i)
+
+    for i in range(20):
+        # this records the error signal and counts the error signal counter up
+        for i in range(N_points):
+            yield
+
+        # this adjusts the feed forward
+        for i in range(N_points):
+            yield
+
+        # this replays the adjusted version
+        for i in range(2 * N_points):
+            yield
+
 N_bits = 4
 N_points = 8
+
+player = FeedForwardPlayer(N_bits, N_points)
+run_simulation(player, test_planned_stop(player, N_bits, N_points), vcd_name="feedforward_planned_stop.vcd")
 
 player = FeedForwardPlayer(N_bits, N_points)
 run_simulation(player, test_recording(player, N_bits, N_points), vcd_name="feedforward_recording.vcd")

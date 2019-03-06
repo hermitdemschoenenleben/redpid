@@ -3,7 +3,7 @@ from misoc.interconnect.csr import CSRStorage, AutoCSR
 
 class TTLPlayer(Module, AutoCSR):
     def __init__(self, N_ttls=10):
-        self.counter = Signal(32)
+        self.counter = Signal(40)
         self.reset = Signal(1)
 
         self.sync += [
@@ -21,9 +21,9 @@ class TTLPlayer(Module, AutoCSR):
         self.outs = []
 
         for N in range(N_ttls):
-            start = CSRStorage(32, name='ttl%d_start' % N)
+            start = CSRStorage(40, name='ttl%d_start' % N)
             setattr(self, 'ttl%d_start' % N, start)
-            end = CSRStorage(32, name='ttl%d_end' % N)
+            end = CSRStorage(40, name='ttl%d_end' % N)
             setattr(self, 'ttl%d_end' % N, end)
             out = Signal(1, name='ttl%d_out' % N)
 

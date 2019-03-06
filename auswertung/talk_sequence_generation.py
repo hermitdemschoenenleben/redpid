@@ -10,8 +10,9 @@ sns.set_context("talk", font_scale=0.8)
 #sns.set()
 
 LENGTH = 131.072e-6
+FPS = 40
 
-gs = gridspec.GridSpec(2, 1, height_ratios=[1.5, 2.5])
+gs = gridspec.GridSpec(2, 1, height_ratios=[2.5, 1.5])
 
 def iterate_over_control_signals(folder):
     filename = folder + 'control-signal.pickle'
@@ -29,11 +30,17 @@ def iterate_over_control_signals(folder):
     )
     time_ticks = np.arange(0, 160, 20)
 
+    center_current = 125
+
     for i, d in enumerate(control):
+        if i == 0:
+            # invent a "zero" line
+            yield (times, [center_current] * len(d))
+
         # convert to volt
         d = [c / 8192 for c in d]
         d = [
-            125 - (v * 50) for v in d
+            center_current - (v * 50) for v in d
         ]
 
         yield (times, d)
@@ -61,9 +68,22 @@ def iterate_over_frequencies(folder):
                 if not use_cache:
                     print('skipping', n)
 
+        if i == 0:
+            # invent a "zero" line
+            yield (
+                [_ / 1e-6 for _ in times[-1]],
+                [np.mean([_  / 1e8 for _ in data[-1] if not np.isnan(_)])] * len(data[-1])
+            )
+
         yield [_ / 1e-6 for _ in times[-1]], [_ / 1e8 for _ in data[-1]]
 
     plt.show()
+
+
+def get_fn(i):
+    return 'exported/%s.png' % (
+        ('000000' + str(i))[-5:]
+    )
 
 
 def plot_control_signal_and_frequencies(folder):
@@ -73,8 +93,10 @@ def plot_control_signal_and_frequencies(folder):
             iterate_over_control_signals(folder),
             iterate_over_frequencies(folder + 'frequencies/')
     )):
+        plt.clf()
+
         # plot control signal
-        ax = plt.subplot(gs[0])
+        ax = plt.subplot(gs[1])
 
         #plt.grid()
         ax.xaxis.grid(True)
@@ -84,18 +106,18 @@ def plot_control_signal_and_frequencies(folder):
         #plt.xticks(time_ticks)
         #plt.xlim((0, LENGTH / 1e-6))
         plt.yticks((75, 100, 125, 150, 175))
-        plt.xticks(visible=False)
+        plt.xlabel('time in us')
+
 
         plt.ylabel('inj. current in mA')
         #plt.tight_layout()
 
         # plot frequencies
-        ax = plt.subplot(gs[1])
+        ax = plt.subplot(gs[0])
         ax.get_yaxis().set_label_coords(-.08,0.5)
         ax.xaxis.grid(True)
         #plt.grid()
 
-        plt.xlabel('time in us')
         plt.ylabel('beat note in GHz')
         len_f = int(len(times_f) / 200 * time_length)
         shift = 9
@@ -106,9 +128,7 @@ def plot_control_signal_and_frequencies(folder):
         plt.plot(times_f[:len_f], frequencies[shift:shift + len_f])
         plt.ylim((-0.5, 7.5))
         plt.xlim((0, time_length))
-
-
-        fn = ('000000' + str(i))[-5:]
+        plt.xticks(visible=False)
 
 
         def figsize(ratio=1.33, figwidth=None, figheigth=None):
@@ -143,14 +163,19 @@ def plot_control_signal_and_frequencies(folder):
 
 
         plt.tight_layout()
-        plt.savefig(folder + 'exported/%s.png' % fn)
-        plt.clf()
+        plt.title('%.1f s' % (i / FPS))
+        plt.savefig(folder + get_fn(i))
+
+
+    # save the last frame several times
+    for j in range(1000):
+        plt.savefig(folder + get_fn(i + j))
 
 
 def images_to_mp4(folder):
     subprocess.Popen(
-        'ffmpeg -y -framerate 40 -i %s/exported/%%05d.png -c:v libx264 -profile:v high '
-        '-crf 20 -pix_fmt yuv420p %s/output.mp4' % (folder, folder),
+        'ffmpeg -y -framerate %d -i %s/exported/%%05d.png -c:v libx264 -profile:v high '
+        '-crf 20 -pix_fmt yuv420p %s/output.mp4' % (FPS, folder, folder),
         shell=True
     )
 

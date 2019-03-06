@@ -1,16 +1,22 @@
 from osci_to_frequency import do
-from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt, gridspec
 from matplotlib.patches import Rectangle
 from matplotlib.collections import PatchCollection
+from plotting.utils import set_font_size, figsize
 
 import seaborn as sns
 #sns.set()
 #sns.set_style('white')
-sns.set_context('talk')
+#sns.set_context('talk')
+
+FONT_SIZE = 14
+
+set_font_size(FONT_SIZE)
+row = gridspec.GridSpec(1, 2, width_ratios=[2, 1])
 
 if __name__ == '__main__':
     folder = '/media/depot/data/afmot/decimation_curvdelay/'
-    output_folder = '/home/ben/Schreibtisch/afmot-talk/'
+    output_folder = '/home/ben/Schreibtisch/paper/plots/'
 
     decimation = 5
     delay = 15
@@ -34,6 +40,9 @@ if __name__ == '__main__':
         ylim = (y-0.012, y+0.012)
 
         plt.clf()
+        plt.gcf().set_size_inches(*figsize(1.65))
+        
+        plt.subplot(row[1])
         bin_max = y + 0.02
         bin_min = y - 0.02
         # 1 MHz size
@@ -49,9 +58,12 @@ if __name__ == '__main__':
         plt.xlabel('#')
         plt.gca().set_aspect(7500)
         plt.tight_layout()
-        plt.savefig(output_folder + 'frequency-jump-histogram-%d.png' % i, transparent=True)
+        #plt.savefig(output_folder + 'frequency-jump-histogram-%d.png' % i, transparent=True)
         #plt.show()
-        plt.clf()
+        #plt.clf()
+        
+          
+        plt.subplot(row[0])
 
         # plot line width
         for height, shift, color in (
@@ -81,7 +93,7 @@ if __name__ == '__main__':
         plt.xlabel('time in us')
 
         plt.tight_layout()
-        plt.savefig(output_folder + 'frequency-jump-zoom-%d.png' % i)
+        plt.savefig(output_folder + 'frequency-jump-zoom-and-hist-%d.png' % i)
         #plt.show()
         plt.clf()
 

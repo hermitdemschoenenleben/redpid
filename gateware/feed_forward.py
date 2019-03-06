@@ -32,7 +32,7 @@ class FeedForwardPlayer(Module, AutoCSR):
         self.enabled = CSRStorage()
         # should the algorithm for continuous feed forward improvement run?
         self.run_algorithm = CSRStorage()
-        self.stop_algorithm_after = CSRStorage(20, reset=(1<<20) - 1)
+        self.stop_algorithm_after = CSRStorage(30, reset=(1<<30) - 1)
         self.algorithm_running = Signal()
         # up to which state should the state machine go in each cycle?
         self.max_state = CSRStorage(10, reset=STATE_REPLAY_FILTER_CURVATURE)
@@ -40,7 +40,7 @@ class FeedForwardPlayer(Module, AutoCSR):
 
         # request a stop at a specific zone
         self.request_stop = CSRStorage()
-        self.stop_after = CSRStorage(20, reset=(1<<20) - 1)
+        self.stop_after = CSRStorage(30, reset=(1<<30) - 1)
         self.stop_zone = CSRStorage(bits_for(N_zones))
 
         # should the feed forward and error signal be recorded?
@@ -48,7 +48,7 @@ class FeedForwardPlayer(Module, AutoCSR):
         self.request_recording = CSRStorage()
         # if the recording should not be started immediately but after a
         # specific iteration of the algorithm, use this storage.
-        self.record_after = CSRStorage(20)
+        self.record_after = CSRStorage(30)
 
         # communication with the bus
         self.data_out = CSRStatus(self.N_bits)

@@ -42,7 +42,7 @@ class ClockPlayer(Module):
         counter_before_2 = Signal.like(self.leading_counter)
 
         self.sync += [
-            If(self.request_stop & (self.current_zone == self.stop_zone) & (self.counter == self.current_zone_edge - 3),
+            If(self.request_stop & (self.current_zone == self.stop_zone) & (self.leading_counter == self.current_zone_edge - 3),
                 self.stopped.eq(1)
             ),
             If(((~self.stopped) & 0b1),
@@ -62,7 +62,7 @@ class ClockPlayer(Module):
         ]
 
     def play_clock(self):
-        self.iteration_counter = Signal(20)
+        self.iteration_counter = Signal(30)
 
         counter_is_at_zone_edge = self.counter == self.current_zone_edge
         counter_is_at_last_point = self.counter == self.last_point

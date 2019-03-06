@@ -47,6 +47,7 @@ class FastChain(Module, AutoCSR):
         y_clear = Signal()
         y_sat = Signal()
         y_railed = Signal()
+        pid_enable = Signal()
 
         clocks = []
         for N in range(N_zones):
@@ -56,8 +57,8 @@ class FastChain(Module, AutoCSR):
             setattr(self, name, signal)
 
 
-        self.state_in = x_hold, x_clear, y_hold, y_clear#, relock
-        self.state_out = x_sat, x_railed, y_sat, y_railed, *clocks#, unlocked
+        self.state_in = x_hold, x_clear, y_hold, y_clear, pid_enable
+        self.state_out = x_sat, x_railed, y_sat, y_railed, *clocks
 
         x = Signal((signal_width, True))
         other_x = Signal((signal_width, True))
@@ -68,14 +69,26 @@ class FastChain(Module, AutoCSR):
         rx = Signal((signal_width, True))
 
         self.signal_in = dx, dy, rx
-        self.signal_out = x, y, other_x, pid_out#, sweep_trigger
+        self.signal_out = x, y, other_x, pid_out
 
         ###
 
         self.submodules.pid = PID()
         self.comb += [
-            self.pid.input.eq(self.other_adc),
-            pid_out.eq(self.pid.pid_out)
+            self.pid.input.eq(
+                Mux(
+                    pid_enable,
+                    self.adc,
+                    0
+                )
+            ),
+            pid_out.eq(
+                Mux(
+                    pid_enable,
+                    self.pid.pid_out,
+                    0
+                )
+            )
         ]
 
         self.submodules.iir_a = Iir(

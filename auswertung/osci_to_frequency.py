@@ -288,7 +288,18 @@ def do(filename, use_cache, show_plot, skip_fit=False):
         bin_max = 10e9
         # 1 MHz size
         N_bins = 10000
-        hist, bin_edges = np.histogram(combined, N_bins, (0, bin_max))
+
+        # we have to slice a 130 us interval
+        slice_length = int(131.5 / 200 * len(combined))
+        slice_shift = 30
+        combined_slice = combined[slice_shift:slice_shift+slice_length]
+        times_fit_slice = times_fit[slice_shift:slice_shift+slice_length]
+
+        plt.title('sliced (sollte einen Zyklus darstellen)')
+        plt.plot(times_fit_slice, combined_slice)
+        plt.show()
+
+        hist, bin_edges = np.histogram(combined_slice, N_bins, (0, bin_max))
         # in MHz
         bin_positions = list(range(len(hist)))
 
@@ -311,7 +322,7 @@ def do(filename, use_cache, show_plot, skip_fit=False):
 
         print('in total close to any of the frequencies:')
         for range_idx, range_ in enumerate(ranges):
-            percentage = total_in_range[range_idx] / len(combined) * 100
+            percentage = total_in_range[range_idx] / slice_length * 100
             rv['total_close_%d' % range_] = percentage
             print('± %d MHz: %.0f %%' % (range_, percentage))
 
