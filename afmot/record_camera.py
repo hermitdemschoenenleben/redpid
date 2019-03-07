@@ -124,14 +124,14 @@ if __name__ == '__main__':
     input('continue')
     """
 
-    for task in range(13):
+    for task in range(1):
         print('TASK!!!!', task)
         SMOT = 0
         MOT = 1
 
         data = []
         
-        for iteration in range(41):
+        for iteration in range(3):
             print('iteration', iteration)
             for cam in cams:
                 cam.cam.reset_frame_ready()
@@ -144,6 +144,7 @@ if __name__ == '__main__':
             for j in [SMOT, MOT]:
                 print('SMOT' if j == SMOT else 'MOT')
                 for img_number in range(10000000):
+                    print('n', img_number)
                     #cams[0].cam.wait_til_frame_ready()
         
                     imgs = []
@@ -163,9 +164,9 @@ if __name__ == '__main__':
                     atom_numbers.append(atom_number)
         
                     if new_time - last_time > 1 and img_number > 0:
-                        #for img in imgs:
-                        #    plt.pcolormesh(img)
-                        #    plt.show()
+                        for img in imgs:
+                            plt.pcolormesh(img)
+                            plt.show()
                         if j == SMOT:
                             d['N_smot'] = atom_number
                             d['img_smot_live'] = crop_imgs(last_imgs)
