@@ -70,7 +70,10 @@ class Pid(Module):
 
         self.comb += [
             self.ttl.reset.eq(
-                (~self.control_loop.sequence_player.enabled.storage)[0]
+                (~(
+                    self.control_loop.sequence_player.enabled.storage
+                    & self.control_loop.sequence_player.start_clocks.storage
+                ))[0]
             )
         ]
 

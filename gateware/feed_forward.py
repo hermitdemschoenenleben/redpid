@@ -34,6 +34,10 @@ class FeedForwardPlayer(Module, AutoCSR):
         self.run_algorithm = CSRStorage()
         self.stop_algorithm_after = CSRStorage(30, reset=(1<<30) - 1)
         self.algorithm_running = Signal()
+
+        # allows for a synchronized start of both clocks
+        self.start_clocks = CSRStorage()
+
         # up to which state should the state machine go in each cycle?
         self.max_state = CSRStorage(10, reset=STATE_REPLAY_FILTER_CURVATURE)
         self.last_point = CSRStorage(bits_for(N_points - 1), reset=N_points - 1)
@@ -101,7 +105,7 @@ class FeedForwardPlayer(Module, AutoCSR):
         self.value = Signal.like(self.value_internal)
         self.comb += [
             self.value.eq(
-                Mux(self.enabled.storage, self.value_internal, 0)
+                Mux(self.enabled.storage & self.start_clocks.storage, self.value_internal, 0)
             )
         ]
 
@@ -122,7 +126,7 @@ class FeedForwardPlayer(Module, AutoCSR):
 
         self.comb += [
             self.algorithm_running.eq(
-                self.run_algorithm.storage  & (
+                self.run_algorithm.storage  & self.start_clocks.storage &  (
                     (self.iteration_counter <= self.stop_algorithm_after.storage)
                 )
             ),
@@ -136,7 +140,7 @@ class FeedForwardPlayer(Module, AutoCSR):
             self.iteration_counter.eq(self.clock.iteration_counter),
 
             # connections to clock
-            self.clock.enabled.eq(self.enabled.storage),
+            self.clock.enabled.eq(self.enabled.storage & self.start_clocks.storage),
             self.clock.request_stop.eq(
                 (self.request_stop.storage & (self.state == STATE_REPLAY))
                 | (self.iteration_counter > self.stop_after.storage)

@@ -74,7 +74,8 @@ class FastChain(Module, AutoCSR):
         ###
 
         self.submodules.pid = PID()
-        self.comb += [
+        # FIXME: probably can be comb again
+        self.sync += [
             self.pid.input.eq(
                 Mux(
                     pid_enable,
