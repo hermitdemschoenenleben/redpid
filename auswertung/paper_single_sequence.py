@@ -3,6 +3,7 @@ from matplotlib import pyplot as plt, gridspec
 from matplotlib.patches import Rectangle
 from matplotlib.collections import PatchCollection
 from plotting.utils import set_font_size, figsize
+from ben.plot import plt, save_paper, gridspec, set_font_scale, set_font_size
 
 import seaborn as sns
 #sns.set()
@@ -55,7 +56,7 @@ if __name__ == '__main__':
         plt.yticks([], visible=False)
         plt.ylim(ylim)
 
-        plt.xlabel('#')
+        plt.xlabel('\\#')
         plt.gca().set_aspect(7500)
         plt.tight_layout()
         #plt.savefig(output_folder + 'frequency-jump-histogram-%d.png' % i, transparent=True)
@@ -66,15 +67,18 @@ if __name__ == '__main__':
         plt.subplot(row[0])
 
         # plot line width
+        red = '#ffcccc'
+        green = '#cce5cc'
         for height, shift, color in (
-            (3/1000, -6/1000, 'r'),
-            (6/1000, -3/1000, 'g'),
-            (3/1000, 3/1000, 'r')
+            (3/1000, -6/1000, red),
+            (6/1000, -3/1000, green),
+            (3/1000, 3/1000, red)
         ):
             rect = Rectangle((0, y + shift), 10000, height)
             # Create patch collection with specified colour/alpha
+           
             pc = PatchCollection(
-                [rect], facecolor=color, alpha=.2,
+                [rect], facecolor=color,
                 edgecolor=color
             )
             # Add collection to axes
@@ -90,10 +94,11 @@ if __name__ == '__main__':
         plt.yticks(yticks)
         plt.ylim(ylim)
         plt.ylabel('beat note in GHz')
-        plt.xlabel('time in us')
+        plt.xlabel(r'time in \SI{}{\micro\second}')
 
         plt.tight_layout()
-        plt.savefig(output_folder + 'frequency-jump-zoom-and-hist-%d.png' % i)
+        plt.savefig(output_folder + 'frequency-jump-zoom-and-hist-%d.eps' % i)
+        #save_paper('frequency-jump-zoom-and-hist-%d' % i, svg=True)
         #plt.show()
         plt.clf()
 

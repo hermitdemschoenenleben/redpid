@@ -61,8 +61,8 @@ class Pitaya:
 
             gpio_n_do0_en=self.pitaya.states('control_loop_clock_0'),
             gpio_n_do1_en=self.pitaya.states('control_loop_clock_1'),
-            #gpio_n_do2_en=self.pitaya.states('control_loop_clock_2'),
-            #gpio_n_do3_en=self.pitaya.states('control_loop_clock_3'),
+            gpio_n_do2_en=self.pitaya.states('control_loop_clock_2'),
+            gpio_n_do3_en=self.pitaya.states('control_loop_clock_3'),
             #gpio_n_do4_en=self.pitaya.states(),
             #gpio_n_do5_en=self.pitaya.states(),
         )
