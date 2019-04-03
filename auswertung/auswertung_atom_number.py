@@ -35,4 +35,9 @@ for iterations in all_data:
 print(relative_atom_numbers)
 
 plt.plot(relative_atom_numbers)
+plt.ylim([0, 110])
+plt.xlim([0, 1])
+plt.xlabel('cooling light duty cycle')
+plt.ylabel('relative atom number')
+#plt.savefig('afmot_relative_atom_number_too_good.svg')
 plt.show()

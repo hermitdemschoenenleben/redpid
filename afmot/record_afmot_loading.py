@@ -5,49 +5,42 @@ from gain_camera.gain_connection import Connection
 from matplotlib import pyplot as plt
 import pickle
 
-cam_idxs = [1]
-
 def record_afmot_loading(pipe=None):
     c = Connection()
     c.connect()
-    try:
-        c.enable_trigger(True, cam_idxs)
-    except:
-        pass
-
+    c.enable_trigger(True)
+    c.run_continuous_acquisition()
     exposure = -12
     c.set_exposure_time(exposure)
 
     AFMOT = 0
     MOT = 1
 
-    for idx in cam_idxs:
-        c.reset_frame_ready(idx)
-
     d = {}
     last_time = time()
     times = []
     atom_numbers = []
+
+    def wait_for_frame():
+        while True:
+            c.call_listeners()
+
+            if c.image_data is not None:
+                image_data = c.image_data
+                c.image_data = None
+                return time(), image_data
 
     for j in [AFMOT, MOT]:
         print('AMOT' if j == AFMOT else 'MOT')
         for img_number in range(10000000):
             print('record image number', img_number, end='\r')
 
-            imgs = []
-
-            for cam_idx in cam_idxs:
-                c.wait_till_frame_ready(cam_idx)
-                imgs.append(c.retrieve_image(cam_idx))
-
-            new_time = time()
+            new_time, imgs = wait_for_frame()
             times.append(new_time)
 
-            for cam_idx in cam_idxs:
-                # this is necessary for all cams in order to flush img cache
-                c.reset_frame_ready(cam_idx)
-
-            atom_number = np.mean([img2count(img, exposure) for img in imgs])
+            atom_number = np.mean(
+                [img2count(img, exposure) for img in imgs]
+            )
             atom_numbers.append(atom_number)
 
             if new_time - last_time > 1 and img_number > 0:
