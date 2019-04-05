@@ -1,7 +1,7 @@
 from time import time
 import numpy as np
 from gain_camera.utils import img2count, crop_imgs
-from gain_camera.gain_connection import Connection
+from gain_camera.connection import Connection
 from matplotlib import pyplot as plt
 import pickle
 
