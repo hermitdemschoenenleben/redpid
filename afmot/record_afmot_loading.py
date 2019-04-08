@@ -5,13 +5,14 @@ from gain_camera.connection import Connection
 from matplotlib import pyplot as plt
 import pickle
 
-def record_afmot_loading(pipe=None):
+def record_afmot_loading_old_style(pipe=None):
     c = Connection()
     c.connect()
+    # important: using -12 or -12 leads to overexposed images for some reason...
+    exposure = -11
+    c.set_exposure_time(exposure)
     c.enable_trigger(True)
     c.run_continuous_acquisition()
-    exposure = -12
-    c.set_exposure_time(exposure)
 
     AFMOT = 0
     MOT = 1
@@ -23,7 +24,7 @@ def record_afmot_loading(pipe=None):
 
     def wait_for_frame():
         while True:
-            c.call_listeners()
+            c.parameters.call_listeners()
 
             if c.image_data is not None:
                 image_data = c.image_data
@@ -82,6 +83,56 @@ def record_afmot_loading(pipe=None):
 
     return d
 
+def record_afmot_loading_new_style(pipe=None):
+    c = Connection()
+    c.connect()
+    # important: using -12 or -12 leads to overexposed images for some reason...
+    # FIXME: Wrong exposure
+    exposure = -11
+    c.set_exposure_time(exposure)
+    c.enable_trigger(True)
+    c.run_continuous_acquisition()
+
+    d = {}
+
+    def wait_for_frame():
+        while True:
+            c.parameters.call_listeners()
+
+            if c.image_data is not None:
+                image_data = c.image_data
+                c.image_data = None
+                return time(), image_data
+
+    assert c.image_data is None
+
+    start_time = time()
+    afmot_time, afmot = wait_for_frame()
+    assert afmot_time - start_time > 10
+
+    mot_time, mot = wait_for_frame()
+    assert mot_time - afmot_time > 10
+
+    d['img_afmot'] = afmot
+    d['img_mot'] = mot
+
+    new_time, imgs = wait_for_frame()
+
+
+    for key, imgs in (('N_afmot', afmot), ('N_mot', mot)):
+        atom_number = np.mean(
+            [img2count(img, exposure) for img in imgs]
+        )
+        d[key] = atom_number
+
+    #plt.plot([_['N_afmot'] for _ in data])
+    #plt.plot([_['N_mot'] for _ in data])
+    #plt.grid()
+    #plt.show()
+    if pipe is not None:
+        pipe.send(pickle.dumps(d))
+
+    return d
 
 if __name__ == '__main__':
     record_afmot_loading()
