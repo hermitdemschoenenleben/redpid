@@ -96,18 +96,18 @@ if __name__ == '__main__':
                 # TTL1: turn off cooling laser (it's inverse!)
                 # do3_en (Kanal 4) ist cooling laser
                 init_ttl(2, cooling_off, cooling_on_again)
-                #rp.pitaya.set(COOLING_PIN, states('ttl_ttl2_out'))
+                rp.pitaya.set(COOLING_PIN, states('ttl_ttl2_out'))
 
                 # TTL2: turn on repumping laser
                 # do5_en (Kanal 6) ist repumper!
                 init_ttl(3, repumping_on, repumping_off)
-                #rp.pitaya.set(REPUMPING_PIN, states('ttl_ttl3_out'))
+                rp.pitaya.set(REPUMPING_PIN, states('ttl_ttl3_out'))
 
                 # TTL4: trigger camera
                 # do4_en (Kanal 5) ist cam trigger gpio_n_do4_en
                 init_ttl(4, int(camera_trigger), int(camera_trigger + ONE_SECOND))
                 cam_trig_ttl = states('ttl_ttl4_out')
-                #rp.pitaya.set(CAM_TRIG_PIN, cam_trig_ttl)
+                rp.pitaya.set(CAM_TRIG_PIN, cam_trig_ttl)
             else:
                 repumping_time = 2 * ONE_MS
                 cooling_again_after = 3 * ONE_MS
