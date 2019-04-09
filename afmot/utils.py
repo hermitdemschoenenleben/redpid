@@ -58,3 +58,11 @@ def save_osci(filename, force_trigger=False):
 
     scope.write('SAVE:WAVEFORM ALL, "C:/Documents and Settings/TekScope_Local_Admin/Desktop/Ben/%s"' % filename)
 
+
+def reset_fpga(host, user, password):
+    ssh_cmd='sshpass -p %s ssh %s@%s' % (password, user, host)
+    reset_cmd="/bin/bash /reset.sh"
+    p = subprocess.Popen(' '.join([ssh_cmd, reset_cmd]).split(),
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+    p.wait()
