@@ -1,5 +1,6 @@
 import time
 import numpy as np
+import pickle
 import subprocess
 from os import path
 from devices import connect_to_device_service
@@ -7,6 +8,18 @@ from devices import connect_to_device_service
 REPLAY_SHIFT = -200-24
 LENGTH = 16384
 N_BITS = 14
+MAX_STATE = 4
+N_STATES = MAX_STATE + 1
+ONE_ITERATION = 16384 * N_STATES
+BASE_FREQ = 7629.394531249999
+ITERATIONS_PER_SECOND = BASE_FREQ / N_STATES
+ONE_SECOND = ONE_ITERATION * ITERATIONS_PER_SECOND
+ONE_MS = ONE_SECOND / 1000
+COOLING_PIN = 'gpio_n_do3_en'
+CAM_TRIG_PIN = 'gpio_n_do4_en'
+REPUMPING_PIN = 'gpio_n_do5_en'
+END_DELAY = 5000 * ONE_SECOND
+
 
 def do(cmd):
     subprocess.call(cmd, shell=True)
@@ -66,3 +79,26 @@ def reset_fpga(host, user, password):
             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
     p.wait()
+
+
+def load_old_data(folder, filename):
+    class OverrideData(Exception):
+        pass
+
+    try:
+        with open(folder + filename, 'rb') as f:
+            all_data = pickle.load(f)
+
+        while True:
+            append_data = input('file already exists. Append (a) or override (o) data?')
+            if append_data not in ('a', 'o'):
+                continue
+            if append_data == 'o':
+                raise OverrideData()
+            else:
+                break
+
+    except (OverrideData, FileNotFoundError):
+        all_data = {}
+
+    return all_data

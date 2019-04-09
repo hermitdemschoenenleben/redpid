@@ -84,7 +84,7 @@ csr = {
     'control_loop_sequence_player_record_after': (0, 0x08b, 30, True),
     'control_loop_sequence_player_data_out': (0, 0x08f, 14, False),
     'control_loop_sequence_player_data_out_addr': (0, 0x091, 14, True),
-    'control_loop_sequence_player_error_signal_out': (0, 0x093, 1, False),
+    'control_loop_sequence_player_error_signal_out': (0, 0x093, 2, False),
     'control_loop_sequence_player_error_signal_out_addr': (0, 0x094, 14, True),
     'control_loop_sequence_player_data_in': (0, 0x096, 14, True),
     'control_loop_sequence_player_data_addr': (0, 0x098, 14, True),

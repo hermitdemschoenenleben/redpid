@@ -178,7 +178,7 @@ class Pitaya:
 
         # convert batch read objects to integers
         data = [int(_) for _ in data]
-        data = np.roll(data, -5)
+        data = np.roll(data, 0)
 
         return data
 

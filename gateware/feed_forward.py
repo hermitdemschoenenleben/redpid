@@ -57,7 +57,7 @@ class FeedForwardPlayer(Module, AutoCSR):
         # communication with the bus
         self.data_out = CSRStatus(self.N_bits)
         self.data_out_addr = CSRStorage(self.N_address_bits)
-        self.error_signal_out = CSRStatus(1)
+        self.error_signal_out = CSRStatus(2)
         self.error_signal_out_addr = CSRStorage(self.N_address_bits)
         self.data_in = CSRStorage(self.N_bits)
         self.data_addr = CSRStorage(self.N_address_bits)
