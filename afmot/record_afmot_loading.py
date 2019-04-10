@@ -367,9 +367,9 @@ def record_afmot_loading_new_style(pipe=None):
     print('recorded mot image at', mot_time - start_time)
     assert mot_time - afmot_time > 10
 
-    d['img_background'] = background
-    d['img_afmot'] = afmot
-    d['img_mot'] = mot
+    d['img_background'] = crop_imgs(background)
+    d['img_afmot'] = crop_imgs(afmot)
+    d['img_mot'] = crop_imgs(mot)
 
     for key, imgs in (('N_background', background), ('N_afmot', afmot), ('N_mot', mot)):
         atom_number = np.mean(

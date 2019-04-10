@@ -3,15 +3,17 @@ import numpy as np
 from matplotlib import pyplot as plt
 from gain_camera.utils import crop_imgs
 
-#FOLDER = '/media/depot/data/afmot/atom-numbers/'
-FOLDER = '/media/depot/data/fake-afmot/atom-numbers/'
+FOLDER = '/media/depot/data/afmot/atom-numbers/'
+#FOLDER = '/media/depot/data/fake-afmot/atom-numbers/'
+
+input('not cropping!')
 
 with open(FOLDER + 'test.pickle', 'rb') as f:
     all_data = pickle.load(f)
 
 def sum_imgs(imgs):
     #imgs = imgs[2]
-    imgs = crop_imgs(imgs)
+    #imgs = crop_imgs(imgs)
     #for img in imgs:
     #    plt.pcolormesh(img)
     #    plt.show()
@@ -45,15 +47,16 @@ for duty_cycle, iterations in all_data.items():
         current_atom_numbers.append(N_afmot / N_mot * 100)
         mot_numbers.append(N_mot - zero)
 
-        """#for img_idx in range(3):
-        for img_idx in [0]:
-            plt.subplot(1, 3, 1)
-            plt.pcolormesh(d['img_background'][img_idx], vmax=100)
-            plt.subplot(1, 3, 2)
-            plt.pcolormesh(d['img_afmot'][img_idx], vmax=255)
-            plt.subplot(1, 3, 3)
-            plt.pcolormesh(d['img_mot'][img_idx], vmax=255)
-            plt.show()"""
+        """if duty_cycle > 0.6:
+            #for img_idx in range(3):
+            for img_idx in [0, 1, 2]:
+                plt.subplot(1, 3, 1)
+                plt.pcolormesh(d['img_background'][img_idx], vmax=100)
+                plt.subplot(1, 3, 2)
+                plt.pcolormesh(d['img_afmot'][img_idx], vmax=255)
+                plt.subplot(1, 3, 3)
+                plt.pcolormesh(crop_imgs(d['img_mot'])[img_idx], vmax=255)
+                plt.show()"""
 
     relative_atom_numbers.append(
         np.mean(current_atom_numbers)

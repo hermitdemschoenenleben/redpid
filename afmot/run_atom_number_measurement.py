@@ -8,7 +8,7 @@ from devices import connect_to_device_service
 from utils import counter_measurement, save_osci, arm_osci, N_BITS, LENGTH, \
     reset_fpga, MAX_STATE, N_STATES, ONE_ITERATION, ITERATIONS_PER_SECOND, \
     ONE_SECOND, ONE_MS, COOLING_PIN, CAM_TRIG_PIN, REPUMPING_PIN, END_DELAY, \
-    load_old_data
+    load_old_data, BASE_FREQ
 from registers import Pitaya
 from record_afmot_loading import start_acquisition_process, program_old_style_detection, \
     do_old_style_detection, program_new_style_detection, do_new_style_detection, \
@@ -21,7 +21,7 @@ OLD_STYLE_DETECTION = False
 DECIMATION = 5
 RELATIVE_LENGTH = 1 / (2**DECIMATION)
 CURRENT_BEGIN = 130
-MIN_CURRENT = 123
+MIN_CURRENT = 121.5
 MAX_CURRENT = 150
 CURRENT_STEP = 2
 DETERMINE_CURRENTS = False
@@ -135,7 +135,7 @@ if __name__ == '__main__':
         currents = []
 
         #for cooling_duty_cycle in [.1, .2, .3, .4, .5, .6, .7, .8, .9]:
-        for cooling_duty_cycle in [.2, .25, .3, .35, .4, .45, .5, .55, .6, .65, .7, .75, .8]:
+        for cooling_duty_cycle in np.arange(0.25, 0.95, 0.025):
         #for cooling_duty_cycle in [.5]:
             print('----         DUTY CYCLE %.2f        ----' % cooling_duty_cycle)
             print('currents', currents)
@@ -214,10 +214,18 @@ if __name__ == '__main__':
         all_data = load_old_data(FOLDER, FILENAME)
         #currents = [134.75, 134.75, 132.5, 130.75, 130.75, 130.5, 129.5, 128.5, 128.5, 126.5, 123, 123, 123, 123, 123, 123]
         #cooling_duty_cycles = [.15, .2, .25, .3, .35, .4, .45, .5, .55, .6, .65, .7, .75, .8, .85, .9]
-        currents = [130.75, 130.75, 130.5, 129.5, 128.5, 128.5, 126.5, 123, 123, 123, 123, 123, 123, 123]
-        cooling_duty_cycles = [.3, .35, .4, .45, .5, .55, .6, .65, .7, .75, .8, .85, .9, .95]
+        #currents = [130.75, 130.75, 130.5, 129.5, 128.5, 128.5, 126.5, 123, 123, 123, 123, 123, 123, 123]
+        #cooling_duty_cycles = [.3, .35, .4, .45, .5, .55, .6, .65, .7, .75, .8, .85, .9, .95]
+        currents = [133.25, 133.25, 132.25, 132.25, 132.25, 132.25, 132.0, 130.25, 130.25, 130.25, 129.5, 129.0, 128.75, 128.75, 126.5, 126.5, 125.75, 124.5, 123.5, 123.5, 121.75, 121.75, 121.5, 121.5, 121.5, 121.5, 121.5]
+        cooling_duty_cycles = np.arange(0.25, 0.95, 0.025)
         #    for duty_cycle in [.4, .5, .6, .7, .8, .85, .9, .95]:
+        it = 0
         for current, cooling_duty_cycle in zip(currents, cooling_duty_cycles):
+            if cooling_duty_cycle <= 0.35:
+                continue
+            it += 1
+            if it % 3 != 0:
+                continue
             print('----         DUTY CYCLE %.2f        ----' % cooling_duty_cycle)
 
             for iteration in range(2):
