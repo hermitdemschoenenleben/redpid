@@ -176,9 +176,9 @@ def record_afmot_loading_old_style(pipe=None):
 
 
 def program_new_style_detection(rp, init_ttl, mot_loading_time, states):
-    repumping_time = 2 * ONE_MS
-    cooling_again_after = 3 * ONE_MS
-    camera_trigger_after = 2 * ONE_MS
+    repumping_time = 1 * ONE_MS
+    cooling_again_after = 1.3 * ONE_MS
+    camera_trigger_after = 1.25 * ONE_MS
 
     pid_on = int(mot_loading_time * ONE_ITERATION)
     pid_off = int(pid_on + END_DELAY)
@@ -237,6 +237,78 @@ def program_new_style_detection(rp, init_ttl, mot_loading_time, states):
     return pid_on, pid_off, cam_trig_ttl
 
 
+def program_new_style_detection_aom(rp, init_ttl, mot_loading_time, states, freq_correction):
+    ONE_MS_CORRECTED = ONE_MS * freq_correction
+    ONE_ITERATION_CORRECTED = ONE_ITERATION * freq_correction
+    ONE_SECOND_CORRECTED = ONE_SECOND * freq_correction
+    END_DELAY_CORRECTED = END_DELAY * freq_correction
+
+    repumping_time = 1 * ONE_MS_CORRECTED
+    cooling_again_after = 1.3 * ONE_MS_CORRECTED
+    camera_trigger_after = 1.25 * ONE_MS_CORRECTED
+
+    # we want to be always locked to the cooling transition
+    pid_on = 0
+    pid_off = int(pid_on + END_DELAY_CORRECTED)
+
+    afmot_detection = int(mot_loading_time * ONE_ITERATION_CORRECTED)
+    mot_detection = int(afmot_detection + (mot_loading_time * ONE_ITERATION_CORRECTED))
+
+    # AF-MOT detection
+
+    cooling_off = afmot_detection
+    cooling_on_again = int(afmot_detection + cooling_again_after)
+
+    repumping_on = afmot_detection
+    repumping_off = int(repumping_on + repumping_time)
+
+    camera_trigger_1 = int(afmot_detection + camera_trigger_after)
+
+    # MOT detection
+
+    mot_start = afmot_detection + ONE_SECOND_CORRECTED
+
+    cooling_off_again = mot_detection
+    cooling_last_time = int(mot_detection + cooling_again_after)
+    cooling_last_time_end = int(cooling_last_time + END_DELAY_CORRECTED)
+
+    repumping_on_again = int(mot_start)
+    repumping_off_again = int(mot_detection + repumping_time)
+
+    # this is after detection, just for checking how the MOT looks like
+    final_repumping = int(mot_detection + ONE_SECOND_CORRECTED)
+    final_repumping_end = int(final_repumping + END_DELAY_CORRECTED)
+
+    camera_trigger_2 = int(mot_detection + camera_trigger_after)
+
+    # TTL1: turn on cooling laser
+    # do3_en (Kanal 4) ist cooling laser
+    init_ttl(2, cooling_on_again, cooling_off_again)
+    init_ttl(3, cooling_last_time, cooling_last_time_end)
+
+    rp.pitaya.set(COOLING_PIN, states(
+        'control_loop_clock_2', 'ttl_ttl2_out', 'ttl_ttl3_out'
+    ))
+
+    # TTL2: turn on repumping laser
+    # do5_en (Kanal 6) ist repumper!
+    init_ttl(4, repumping_on, repumping_off)
+    init_ttl(7, repumping_on_again, repumping_off_again)
+    init_ttl(8, final_repumping, final_repumping_end)
+    rp.pitaya.set(REPUMPING_PIN, states(
+        'control_loop_clock_0', 'ttl_ttl4_out', 'ttl_ttl7_out', 'ttl_ttl8_out'
+    ))
+
+    # TTL4: trigger camera
+    # do4_en (Kanal 5) ist cam trigger gpio_n_do4_en
+    init_ttl(5, int(camera_trigger_1), int(camera_trigger_1 + ONE_SECOND_CORRECTED))
+    init_ttl(6, int(camera_trigger_2), int(camera_trigger_2 + ONE_SECOND_CORRECTED))
+    cam_trig_ttl = states('ttl_ttl5_out', 'ttl_ttl6_out')
+    rp.pitaya.set(CAM_TRIG_PIN, cam_trig_ttl)
+
+    return pid_on, pid_off, cam_trig_ttl
+
+
 def new_style_record_background(rp, force, null):
     # record one frame for background
     rp.pitaya.set(CAM_TRIG_PIN, force)
@@ -257,7 +329,7 @@ def do_new_style_detection(rp, cam_trig_ttl, pipe):
 def record_afmot_loading_new_style(pipe=None):
     c = Connection()
     c.connect()
-    exposure = -8
+    exposure = -11
     c.set_exposure_time(exposure)
     c.enable_trigger(True)
     c.run_continuous_acquisition()

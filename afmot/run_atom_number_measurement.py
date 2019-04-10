@@ -25,7 +25,7 @@ MIN_CURRENT = 123
 MAX_CURRENT = 150
 CURRENT_STEP = 2
 DETERMINE_CURRENTS = False
-MOT_LOADING_TIME = int(30 * 2000)
+MOT_LOADING_TIME = int(25 * BASE_FREQ / N_STATES)
 
 
 def analyze_tuning_time(data, start, stop, tuning_value):
@@ -220,7 +220,7 @@ if __name__ == '__main__':
         for current, cooling_duty_cycle in zip(currents, cooling_duty_cycles):
             print('----         DUTY CYCLE %.2f        ----' % cooling_duty_cycle)
 
-            for iteration in range(1):
+            for iteration in range(2):
                 print('----         ITERATION %d        ----' % iteration)
 
                 reset_fpga('rp-f012ba.local', 'root', 'zeilinger')

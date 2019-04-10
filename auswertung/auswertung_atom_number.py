@@ -3,7 +3,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 from gain_camera.utils import crop_imgs
 
-FOLDER = '/media/depot/data/afmot/atom-numbers/'
+#FOLDER = '/media/depot/data/afmot/atom-numbers/'
+FOLDER = '/media/depot/data/fake-afmot/atom-numbers/'
 
 with open(FOLDER + 'test.pickle', 'rb') as f:
     all_data = pickle.load(f)
@@ -21,6 +22,8 @@ def sum_imgs(imgs):
 relative_atom_numbers = []
 relative_atom_numbers_std = []
 duty_cycles = []
+
+mot_numbers = []
 
 for duty_cycle, iterations in all_data.items():
     print('DUTY', duty_cycle)
@@ -40,6 +43,7 @@ for duty_cycle, iterations in all_data.items():
 
         print('percentage', N_afmot / N_mot * 100)
         current_atom_numbers.append(N_afmot / N_mot * 100)
+        mot_numbers.append(N_mot - zero)
 
         """#for img_idx in range(3):
         for img_idx in [0]:
@@ -59,6 +63,10 @@ for duty_cycle, iterations in all_data.items():
     print('result', relative_atom_numbers[-1], 'pm', relative_atom_numbers_std[-1])
 
 print(relative_atom_numbers)
+
+print('!!', np.std(mot_numbers[:10] / np.mean(mot_numbers[:10])))
+print(len(mot_numbers))
+#asd
 
 plt.plot(duty_cycles, relative_atom_numbers)
 plt.errorbar(duty_cycles, relative_atom_numbers, yerr=relative_atom_numbers_std)
