@@ -66,7 +66,7 @@ class Pid(Module):
 
         s, c = 25, 18
         self.submodules.control_loop = FastChain(14, s, c)
-        self.submodules.ttl = TTLPlayer(10)
+        self.submodules.ttl = TTLPlayer(20)
 
         self.comb += [
             self.ttl.reset.eq(
