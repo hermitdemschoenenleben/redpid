@@ -1,3 +1,6 @@
+import sys
+sys.path.append('/home/bebec/Desktop/Ben')
+
 import numpy as np
 import pickle
 
@@ -18,7 +21,7 @@ from record_afmot_loading import start_acquisition_process, program_old_style_de
 FOLDER = '/media/depot/data/afmot/atom-numbers/'
 FILENAME = 'test.pickle'
 OLD_STYLE_DETECTION = False
-LENGTH_FACTOR = 1
+LENGTH_FACTOR = 4
 DECIMATION = 5
 RELATIVE_LENGTH = 1 / (2**DECIMATION) * LENGTH_FACTOR
 CURRENT_BEGIN = 130
@@ -26,16 +29,16 @@ MIN_CURRENT = 121.5
 MAX_CURRENT = 150
 CURRENT_STEP = 2
 DETERMINE_CURRENTS = False
-MOT_LOADING_TIME = int(5 * (BASE_FREQ / LENGTH_FACTOR) / N_STATES)
+MOT_LOADING_TIME = int(30 * (BASE_FREQ / LENGTH_FACTOR) / N_STATES)
 
 
 if __name__ == '__main__':
-    cooling_duty_cycles = [.5]
+    cooling_duty_cycles = [.875]
     #    for duty_cycle in [.4, .5, .6, .7, .8, .85, .9, .95]:
     for cooling_duty_cycle in cooling_duty_cycles:
         print('----         DUTY CYCLE %.2f        ----' % cooling_duty_cycle)
 
-        for iteration in range(3):
+        for iteration in range(10):
             print('----         ITERATION %d        ----' % iteration)
 
             reset_fpga('rp-f012ba.local', 'root', 'zeilinger')
@@ -120,3 +123,4 @@ if __name__ == '__main__':
                 data = do_old_style_detection(rp, force, null, cam_trig_ttl, MOT_LOADING_TIME)
             else:
                 data = do_new_style_detection(rp, cam_trig_ttl, nanospeed_ttl, pipe)
+            
