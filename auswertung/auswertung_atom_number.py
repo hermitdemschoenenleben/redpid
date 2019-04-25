@@ -2,18 +2,24 @@ import pickle
 import numpy as np
 from matplotlib import pyplot as plt
 from gain_camera.utils import crop_imgs
+from ben.plot import plt, save_ma, save_paper, set_font_size
+from seaborn import color_palette
+
+set_font_size(15)
 
 FOLDER = '/media/depot/data/afmot/atom-numbers/'
 #FOLDER = '/media/depot/data/fake-afmot/atom-numbers/'
 
-input('not cropping!')
+plt.clf()
 
-with open(FOLDER + 'test.pickle', 'rb') as f:
+#input('not cropping!')
+
+with open(FOLDER + '19-04-10-gut.pickle', 'rb') as f:
     all_data = pickle.load(f)
 
 def sum_imgs(imgs):
     #imgs = imgs[2]
-    #imgs = crop_imgs(imgs)
+    imgs = crop_imgs(imgs)
     #for img in imgs:
     #    plt.pcolormesh(img)
     #    plt.show()
@@ -33,7 +39,7 @@ for duty_cycle, iterations in all_data.items():
 
     current_atom_numbers = []
 
-    for d in iterations:
+    for d in iterations[:10]:
         zero = d['N_background']
 
         N_afmot = d['N_afmot'] - zero
@@ -81,4 +87,7 @@ plt.ylabel('relative atom number')
 plt.grid()
 plt.xticks([0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1])
 plt.yticks([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
+plt.tight_layout()
+
+save_paper('real_afmot_neu', svg=True)
 plt.show()

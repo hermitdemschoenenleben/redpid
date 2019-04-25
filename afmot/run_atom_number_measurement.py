@@ -25,7 +25,7 @@ MIN_CURRENT = 121.5
 MAX_CURRENT = 150
 CURRENT_STEP = 2
 DETERMINE_CURRENTS = False
-MOT_LOADING_TIME = int(25 * BASE_FREQ / N_STATES)
+MOT_LOADING_TIME = int(30 * BASE_FREQ / N_STATES)
 
 
 def analyze_tuning_time(data, start, stop, tuning_value):
@@ -121,8 +121,10 @@ def determine_tuning_time_balance(rp, cooling_light_duty_cycle):
 
 
 if __name__ == '__main__':
-    _ilx = connect_to_device_service('141.20.47.56', 'ilx')
+    #_ilx = connect_to_device_service('141.20.47.56', 'ilx')
     def set_current(current):
+        print('dont set current!!')
+        return
         assert current >= MIN_CURRENT
         assert current <= MAX_CURRENT
         print('set laser current', current)
@@ -217,15 +219,11 @@ if __name__ == '__main__':
         #currents = [130.75, 130.75, 130.5, 129.5, 128.5, 128.5, 126.5, 123, 123, 123, 123, 123, 123, 123]
         #cooling_duty_cycles = [.3, .35, .4, .45, .5, .55, .6, .65, .7, .75, .8, .85, .9, .95]
         currents = [133.25, 133.25, 132.25, 132.25, 132.25, 132.25, 132.0, 130.25, 130.25, 130.25, 129.5, 129.0, 128.75, 128.75, 126.5, 126.5, 125.75, 124.5, 123.5, 123.5, 121.75, 121.75, 121.5, 121.5, 121.5, 121.5, 121.5]
-        cooling_duty_cycles = np.arange(0.25, 0.95, 0.025)
+        #cooling_duty_cycles = np.arange(0.25, 0.95, 0.025)
+        cooling_duty_cycles = [.8]
         #    for duty_cycle in [.4, .5, .6, .7, .8, .85, .9, .95]:
         it = 0
         for current, cooling_duty_cycle in zip(currents, cooling_duty_cycles):
-            if cooling_duty_cycle <= 0.35:
-                continue
-            it += 1
-            if it % 3 != 0:
-                continue
             print('----         DUTY CYCLE %.2f        ----' % cooling_duty_cycle)
 
             for iteration in range(2):
@@ -267,7 +265,7 @@ if __name__ == '__main__':
                         rp, init_ttl, MOT_LOADING_TIME, states
                     )
                 else:
-                    pid_on, pid_off, cam_trig_ttl = program_new_style_detection(
+                    pid_on, pid_off, cam_trig_ttl, nanospeed_ttl = program_new_style_detection(
                         rp, init_ttl, MOT_LOADING_TIME, states
                     )
 
@@ -283,11 +281,6 @@ if __name__ == '__main__':
                 # TTL0: enable PID
                 init_ttl(0, pid_on, pid_off)
                 rp.pitaya.set('control_loop_pid_enable_en', states('ttl_ttl0_out'))
-
-                # TTL5: announcer
-                # do2 (Kanal 3) ist announcer
-                init_ttl(1, int(pid_on - ONE_MS), int(pid_on - ONE_MS + ONE_SECOND))
-                rp.pitaya.set('gpio_n_do2_en', states('ttl_ttl1_out'))
 
                 rp.enable_channel_b_pid(True, p=200, i=25, d=0, reset=False)
 
@@ -308,6 +301,12 @@ if __name__ == '__main__':
                 #if iteration == 0:
                 #    input('ready?')
 
+                if True:
+                    rp.set_enabled(1)
+                    rp.set_algorithm(1)
+                    rp.pitaya.set('control_loop_sequence_player_start_clocks', 1)
+                    io
+
                 acquiry_process, pipe = start_acquisition_process(old_style=OLD_STYLE_DETECTION)
 
                 if not OLD_STYLE_DETECTION:
@@ -320,7 +319,9 @@ if __name__ == '__main__':
                 if OLD_STYLE_DETECTION:
                     data = do_old_style_detection(rp, force, null, cam_trig_ttl, MOT_LOADING_TIME)
                 else:
-                    data = do_new_style_detection(rp, cam_trig_ttl, pipe)
+                    data = do_new_style_detection(rp, cam_trig_ttl, nanospeed_ttl, pipe)
+
+                asd
 
                 iteration_data = all_data.get(cooling_duty_cycle, [])
                 iteration_data.append(data)
