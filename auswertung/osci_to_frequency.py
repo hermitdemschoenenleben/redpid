@@ -342,38 +342,16 @@ def do(filename, use_cache, show_plot, skip_fit=False):
     return rv
 
 
-"""
 if __name__ == '__main__':
-    filename = '/home/ben/data/afmot/zweiseitiger-test-2/algo-no-pid.csv'
-    filename = '/media/depot/data/MA/jump_lock_continuous/neu-shift2.csv'
-    filename = '/media/depot/data/MA/jump_lock_continuous/with-integrator/endCH1.csv'
-    filename = '/media/depot/data/MA/jump_lock_continuous/without-integrator/endCH1.csv'
-    filename = '/home/ben/data/afmot/zweiseitiger-test-2/hohesamplingrate.csv'
+    filename = '/home/ben/Schreibtisch/test.csv'
 
     show_plot = False
     use_cache = False
 
-    data = []
-
-    delays = [1, 3, 5, 7, 10, 15, 25, 50, 100, 150, 200, 250, 400]
-    #for wait in (3.5, 4.5, 5.5, 6.5):
-    for decimation in (0, 1, 2, 3, 4, 5):
-        d = []
-        for delay in delays:
-            filename = '/media/depot/data/2019/afmot/decimation_curvdelay/decimation_%d_curvdelay_%dCH2.csv' % (decimation, delay)
-            print(decimation, delay)
-            try:
-                d.append(
-                    do(filename, True, False)
-                )
-            except:
-                print('skipping', decimation, delay)
-                continue
-
-        data.append(d)
-
-    for data2 in data:
-        plt.plot(list(d['total_close_6'] for d in data2))
+    
+    do(filename, False, True)
+    asd
+    plt.plot(list(d['total_close_6'] for d in data2))
 
     plt.show()
-"""
+

@@ -18,6 +18,7 @@ ONE_MS = ONE_SECOND / 1000
 COOLING_PIN = 'gpio_n_do3_en'
 CAM_TRIG_PIN = 'gpio_n_do4_en'
 REPUMPING_PIN = 'gpio_n_do5_en'
+AGILENT_NANOSPEED_PIN = 'gpio_n_do2_en'
 END_DELAY = 5000 * ONE_SECOND
 
 

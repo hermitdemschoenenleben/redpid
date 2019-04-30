@@ -7,7 +7,8 @@ from gain_camera.connection import Connection
 from matplotlib import pyplot as plt
 from multiprocessing import Process, Pipe
 from utils import N_BITS, LENGTH, MAX_STATE, N_STATES, ONE_ITERATION, ITERATIONS_PER_SECOND, \
-    ONE_SECOND, ONE_MS, COOLING_PIN, CAM_TRIG_PIN, REPUMPING_PIN, END_DELAY
+    ONE_SECOND, ONE_MS, COOLING_PIN, CAM_TRIG_PIN, REPUMPING_PIN, END_DELAY, \
+    AGILENT_NANOSPEED_PIN
 
 
 def start_acquisition_process(old_style=False):
@@ -175,16 +176,34 @@ def record_afmot_loading_old_style(pipe=None):
     return d
 
 
-def program_new_style_detection(rp, init_ttl, mot_loading_time, states):
-    repumping_time = 1 * ONE_MS
-    cooling_again_after = 1.3 * ONE_MS
-    camera_trigger_after = 1.25 * ONE_MS
+def program_new_style_detection(
+        rp, init_ttl, mot_loading_time, states, freq_correction=1,
+        absorption_detection=False
+    ):
+    ONE_MS_CORRECTED = ONE_MS * freq_correction
+    ONE_ITERATION_CORRECTED = ONE_ITERATION * freq_correction
+    ONE_SECOND_CORRECTED = ONE_SECOND * freq_correction
+    END_DELAY_CORRECTED = END_DELAY
 
-    pid_on = int(mot_loading_time * ONE_ITERATION)
-    pid_off = int(pid_on + END_DELAY)
+    repumping_time = 1 * ONE_MS_CORRECTED
+    nanospeed_after = 1 * ONE_MS_CORRECTED
+    if not absorption_detection:
+        cooling_again_after = 1.3 * ONE_MS_CORRECTED
+        camera_trigger_after = 1.25 * ONE_MS_CORRECTED
+    else:
+        camera_trigger_after = 1.1 * ONE_MS_CORRECTED
+        cooling_again_after = 100 * ONE_MS_CORRECTED
+
+    # record background image
+    nanospeed_trigger_0 = int(nanospeed_after)
+    camera_trigger_0 = int(camera_trigger_after)
+
+
+    pid_on = int(mot_loading_time * ONE_ITERATION_CORRECTED)
+    pid_off = int(pid_on + END_DELAY_CORRECTED)
 
     afmot_detection = pid_on
-    mot_detection = int(afmot_detection + (mot_loading_time * ONE_ITERATION))
+    mot_detection = int(afmot_detection + (mot_loading_time * ONE_ITERATION_CORRECTED))
 
     # AF-MOT detection
 
@@ -195,10 +214,11 @@ def program_new_style_detection(rp, init_ttl, mot_loading_time, states):
     repumping_off = int(repumping_on + repumping_time)
 
     camera_trigger_1 = int(afmot_detection + camera_trigger_after)
+    nanospeed_trigger_1 = int(afmot_detection + nanospeed_after)
 
     # MOT detection
 
-    mot_start = afmot_detection + ONE_SECOND
+    mot_start = afmot_detection + ONE_SECOND_CORRECTED
 
     cooling_off_again = mot_detection
     cooling_last_time = int(mot_detection + cooling_again_after)
@@ -207,10 +227,11 @@ def program_new_style_detection(rp, init_ttl, mot_loading_time, states):
     repumping_off_again = int(mot_detection + repumping_time)
 
     # this is after detection, just for checking how the MOT looks like
-    final_repumping = int(mot_detection + ONE_SECOND)
-    final_repumping_end = int(final_repumping + END_DELAY)
+    final_repumping = int(mot_detection + ONE_SECOND_CORRECTED)
+    final_repumping_end = int(final_repumping + END_DELAY_CORRECTED)
 
     camera_trigger_2 = int(mot_detection + camera_trigger_after)
+    nanospeed_trigger_2 = int(mot_detection + nanospeed_after)
 
     # TTL1: turn off cooling laser (it's inverse!)
     # do3_en (Kanal 4) ist cooling laser
@@ -229,12 +250,20 @@ def program_new_style_detection(rp, init_ttl, mot_loading_time, states):
 
     # TTL4: trigger camera
     # do4_en (Kanal 5) ist cam trigger gpio_n_do4_en
-    init_ttl(5, int(camera_trigger_1), int(camera_trigger_1 + ONE_SECOND))
-    init_ttl(6, int(camera_trigger_2), int(camera_trigger_2 + ONE_SECOND))
-    cam_trig_ttl = states('ttl_ttl5_out', 'ttl_ttl6_out')
+    init_ttl(11, int(camera_trigger_0), int(camera_trigger_0 + ONE_SECOND_CORRECTED))
+    init_ttl(5, int(camera_trigger_1), int(camera_trigger_1 + ONE_SECOND_CORRECTED))
+    init_ttl(6, int(camera_trigger_2), int(camera_trigger_2 + ONE_SECOND_CORRECTED))
+    cam_trig_ttl = states('ttl_ttl5_out', 'ttl_ttl6_out', 'ttl_ttl11_out')
     rp.pitaya.set(CAM_TRIG_PIN, cam_trig_ttl)
 
-    return pid_on, pid_off, cam_trig_ttl
+    # Agilent
+    init_ttl(10, int(nanospeed_trigger_0), int(nanospeed_trigger_0 + ONE_SECOND_CORRECTED))
+    init_ttl(1, int(nanospeed_trigger_1), int(nanospeed_trigger_1 + ONE_SECOND_CORRECTED))
+    init_ttl(9, int(nanospeed_trigger_2), int(nanospeed_trigger_2 + ONE_SECOND_CORRECTED))
+    nanospeed_ttl = states('ttl_ttl1_out', 'ttl_ttl9_out', 'ttl_ttl10_out')
+    rp.pitaya.set(AGILENT_NANOSPEED_PIN, nanospeed_ttl)
+
+    return pid_on, pid_off, cam_trig_ttl, nanospeed_ttl
 
 
 def program_new_style_detection_aom(rp, init_ttl, mot_loading_time, states, freq_correction):
@@ -310,16 +339,20 @@ def program_new_style_detection_aom(rp, init_ttl, mot_loading_time, states, freq
 
 
 def new_style_record_background(rp, force, null):
+    rp.pitaya.set(AGILENT_NANOSPEED_PIN, force)
+    sleep(.05)
     # record one frame for background
     rp.pitaya.set(CAM_TRIG_PIN, force)
     sleep(.05)
     rp.pitaya.set(CAM_TRIG_PIN, null)
+    rp.pitaya.set(AGILENT_NANOSPEED_PIN, null)
 
 
-def do_new_style_detection(rp, cam_trig_ttl, pipe):
+def do_new_style_detection(rp, cam_trig_ttl, nanospeed_ttl, pipe):
     sleep(1)
     # now, internal FPGA should control the camera trigger
     rp.pitaya.set(CAM_TRIG_PIN, cam_trig_ttl)
+    rp.pitaya.set(AGILENT_NANOSPEED_PIN, nanospeed_ttl)
 
     # everything is controlled by FPGA, we don't have to do anything
     data = pickle.loads(pipe.recv())
