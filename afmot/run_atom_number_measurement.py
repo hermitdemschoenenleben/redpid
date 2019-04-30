@@ -1,5 +1,6 @@
-import numpy as np
+import klepto
 import pickle
+import numpy as np
 
 from time import sleep, time
 from matplotlib import pyplot as plt
@@ -16,7 +17,7 @@ from record_afmot_loading import start_acquisition_process, program_old_style_de
 
 
 FOLDER = '/media/depot/data/afmot/atom-numbers/'
-FILENAME = 'test.pickle'
+FILENAME = 'test-neu'
 OLD_STYLE_DETECTION = False
 DECIMATION = 5
 RELATIVE_LENGTH = 1 / (2**DECIMATION)
@@ -25,7 +26,7 @@ MIN_CURRENT = 121.5
 MAX_CURRENT = 150
 CURRENT_STEP = 2
 DETERMINE_CURRENTS = False
-MOT_LOADING_TIME = int(30 * BASE_FREQ / N_STATES)
+MOT_LOADING_TIME = int(60 * BASE_FREQ / N_STATES)
 
 
 def analyze_tuning_time(data, start, stop, tuning_value):
@@ -118,6 +119,32 @@ def determine_tuning_time_balance(rp, cooling_light_duty_cycle):
     print('tuning direction', tuning_direction)
 
     return tuning_direction
+
+
+def save_data(archive, cooling_duty_cycle, data):
+    keys = list(archive.keys())
+
+    def _get_key(it):
+        return '%.4f-%d' % (cooling_duty_cycle, it)
+
+    def _get(it):
+        return archive[_get_key(it)]
+
+    def _set(it, value):
+        archive[_get_key(it)] = value
+
+    iteration = 0
+    while True:
+        archive.load()
+        try:
+            _get(iteration)
+        except KeyError:
+            break
+
+        iteration += 1
+
+    _set(iteration, data)
+    archive.dump()
 
 
 if __name__ == '__main__':
@@ -213,20 +240,37 @@ if __name__ == '__main__':
                         break
 
     else:
-        all_data = load_old_data(FOLDER, FILENAME)
         #currents = [134.75, 134.75, 132.5, 130.75, 130.75, 130.5, 129.5, 128.5, 128.5, 126.5, 123, 123, 123, 123, 123, 123]
         #cooling_duty_cycles = [.15, .2, .25, .3, .35, .4, .45, .5, .55, .6, .65, .7, .75, .8, .85, .9]
         #currents = [130.75, 130.75, 130.5, 129.5, 128.5, 128.5, 126.5, 123, 123, 123, 123, 123, 123, 123]
         #cooling_duty_cycles = [.3, .35, .4, .45, .5, .55, .6, .65, .7, .75, .8, .85, .9, .95]
         currents = [133.25, 133.25, 132.25, 132.25, 132.25, 132.25, 132.0, 130.25, 130.25, 130.25, 129.5, 129.0, 128.75, 128.75, 126.5, 126.5, 125.75, 124.5, 123.5, 123.5, 121.75, 121.75, 121.5, 121.5, 121.5, 121.5, 121.5]
         #cooling_duty_cycles = np.arange(0.25, 0.95, 0.025)
-        cooling_duty_cycles = [.8]
+        cooling_duty_cycles = [.6, .2]
         #    for duty_cycle in [.4, .5, .6, .7, .8, .85, .9, .95]:
-        it = 0
+
+        archive = klepto.archives.dir_archive(FOLDER + FILENAME, serialized=True)
+        archive.sync()
+
+        if len(archive.items()) > 0:
+            while True:
+                append_data = input('file already exists. Append (a) or override (o) data?')
+                if append_data not in ('a', 'o'):
+                    archive.load('duty_cycles')
+                    continue
+                if append_data == 'o':
+                    raise NotImplementedError()
+                    break
+                else:
+                    assert archive['duty_cycles'] == cooling_duty_cycles
+                    break
+
+        archive['duty_cycles'] = cooling_duty_cycles
+
         for current, cooling_duty_cycle in zip(currents, cooling_duty_cycles):
             print('----         DUTY CYCLE %.2f        ----' % cooling_duty_cycle)
 
-            for iteration in range(2):
+            for iteration in range(1):
                 print('----         ITERATION %d        ----' % iteration)
 
                 reset_fpga('rp-f012ba.local', 'root', 'zeilinger')
@@ -301,12 +345,6 @@ if __name__ == '__main__':
                 #if iteration == 0:
                 #    input('ready?')
 
-                if True:
-                    rp.set_enabled(1)
-                    rp.set_algorithm(1)
-                    rp.pitaya.set('control_loop_sequence_player_start_clocks', 1)
-                    io
-
                 acquiry_process, pipe = start_acquisition_process(old_style=OLD_STYLE_DETECTION)
 
                 if not OLD_STYLE_DETECTION:
@@ -321,11 +359,4 @@ if __name__ == '__main__':
                 else:
                     data = do_new_style_detection(rp, cam_trig_ttl, nanospeed_ttl, pipe)
 
-                asd
-
-                iteration_data = all_data.get(cooling_duty_cycle, [])
-                iteration_data.append(data)
-                all_data[cooling_duty_cycle] = iteration_data
-
-                with open(FOLDER + FILENAME, 'wb') as f:
-                    pickle.dump(all_data, f)
+                save_data(archive, cooling_duty_cycle, data)
