@@ -194,6 +194,11 @@ def program_new_style_detection(
         camera_trigger_after = 1.1 * ONE_MS_CORRECTED
         cooling_again_after = 100 * ONE_MS_CORRECTED
 
+    # record background image
+    nanospeed_trigger_0 = int(nanospeed_after)
+    camera_trigger_0 = int(camera_trigger_after)
+
+
     pid_on = int(mot_loading_time * ONE_ITERATION_CORRECTED)
     pid_off = int(pid_on + END_DELAY_CORRECTED)
 
@@ -245,15 +250,17 @@ def program_new_style_detection(
 
     # TTL4: trigger camera
     # do4_en (Kanal 5) ist cam trigger gpio_n_do4_en
+    init_ttl(11, int(camera_trigger_0), int(camera_trigger_0 + ONE_SECOND_CORRECTED))
     init_ttl(5, int(camera_trigger_1), int(camera_trigger_1 + ONE_SECOND_CORRECTED))
     init_ttl(6, int(camera_trigger_2), int(camera_trigger_2 + ONE_SECOND_CORRECTED))
-    cam_trig_ttl = states('ttl_ttl5_out', 'ttl_ttl6_out')
+    cam_trig_ttl = states('ttl_ttl5_out', 'ttl_ttl6_out', 'ttl_ttl11_out')
     rp.pitaya.set(CAM_TRIG_PIN, cam_trig_ttl)
 
     # Agilent
+    init_ttl(10, int(nanospeed_trigger_0), int(nanospeed_trigger_0 + ONE_SECOND_CORRECTED))
     init_ttl(1, int(nanospeed_trigger_1), int(nanospeed_trigger_1 + ONE_SECOND_CORRECTED))
     init_ttl(9, int(nanospeed_trigger_2), int(nanospeed_trigger_2 + ONE_SECOND_CORRECTED))
-    nanospeed_ttl = states('ttl_ttl1_out', 'ttl_ttl9_out')
+    nanospeed_ttl = states('ttl_ttl1_out', 'ttl_ttl9_out', 'ttl_ttl10_out')
     rp.pitaya.set(AGILENT_NANOSPEED_PIN, nanospeed_ttl)
 
     return pid_on, pid_off, cam_trig_ttl, nanospeed_ttl
