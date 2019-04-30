@@ -29,16 +29,17 @@ MIN_CURRENT = 121.5
 MAX_CURRENT = 150
 CURRENT_STEP = 2
 DETERMINE_CURRENTS = False
-MOT_LOADING_TIME = int(30 * (BASE_FREQ / LENGTH_FACTOR) / N_STATES)
+MOT_LOADING_TIME = int(60 * (BASE_FREQ / LENGTH_FACTOR) / N_STATES)
 
 
 if __name__ == '__main__':
-    cooling_duty_cycles = [.875]
+    cooling_duty_cycles = [.85]
     #    for duty_cycle in [.4, .5, .6, .7, .8, .85, .9, .95]:
     for cooling_duty_cycle in cooling_duty_cycles:
         print('----         DUTY CYCLE %.2f        ----' % cooling_duty_cycle)
 
         for iteration in range(10):
+            #input('ready?')
             print('----         ITERATION %d        ----' % iteration)
 
             reset_fpga('rp-f012ba.local', 'root', 'zeilinger')
@@ -112,8 +113,8 @@ if __name__ == '__main__':
 
             acquiry_process, pipe = start_acquisition_process(old_style=OLD_STYLE_DETECTION)
 
-            if not OLD_STYLE_DETECTION:
-                new_style_record_background(rp, force, null)
+            # FIXME: also remove in other experiments if not OLD_STYLE_DETECTION:
+            #    new_style_record_background(rp, force, null)
 
             rp.set_enabled(1)
             rp.set_algorithm(1)
