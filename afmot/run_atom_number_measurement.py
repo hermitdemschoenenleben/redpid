@@ -15,7 +15,7 @@ from record_afmot_loading import start_acquisition_process, program_old_style_de
     new_style_record_background
 
 
-FOLDER = '/media/depot/data/afmot/atom-numbers/'
+FOLDER = '/home/ben/Schreibtisch/data/afmot_atom_numbers/'
 FILENAME = 'test.pickle'
 OLD_STYLE_DETECTION = False
 DECIMATION = 5
@@ -25,7 +25,7 @@ MIN_CURRENT = 121.5
 MAX_CURRENT = 150
 CURRENT_STEP = 2
 DETERMINE_CURRENTS = False
-MOT_LOADING_TIME = int(25 * BASE_FREQ / N_STATES)
+MOT_LOADING_TIME = int(30 * BASE_FREQ / N_STATES)
 
 
 def analyze_tuning_time(data, start, stop, tuning_value):
@@ -211,120 +211,118 @@ if __name__ == '__main__':
                         break
 
     else:
-        all_data = load_old_data(FOLDER, FILENAME)
-        #currents = [134.75, 134.75, 132.5, 130.75, 130.75, 130.5, 129.5, 128.5, 128.5, 126.5, 123, 123, 123, 123, 123, 123]
-        #cooling_duty_cycles = [.15, .2, .25, .3, .35, .4, .45, .5, .55, .6, .65, .7, .75, .8, .85, .9]
-        #currents = [130.75, 130.75, 130.5, 129.5, 128.5, 128.5, 126.5, 123, 123, 123, 123, 123, 123, 123]
-        #cooling_duty_cycles = [.3, .35, .4, .45, .5, .55, .6, .65, .7, .75, .8, .85, .9, .95]
-        currents = [133.25, 133.25, 132.25, 132.25, 132.25, 132.25, 132.0, 130.25, 130.25, 130.25, 129.5, 129.0, 128.75, 128.75, 126.5, 126.5, 125.75, 124.5, 123.5, 123.5, 121.75, 121.75, 121.5, 121.5, 121.5, 121.5, 121.5]
-        cooling_duty_cycles = np.arange(0.25, 0.95, 0.025)
-        #    for duty_cycle in [.4, .5, .6, .7, .8, .85, .9, .95]:
-        it = 0
-        for current, cooling_duty_cycle in zip(currents, cooling_duty_cycles):
-            if cooling_duty_cycle <= 0.35:
-                continue
-            it += 1
-            if it % 3 != 0:
-                continue
-            print('----         DUTY CYCLE %.2f        ----' % cooling_duty_cycle)
 
-            for iteration in range(2):
-                print('----         ITERATION %d        ----' % iteration)
+        for repetition in range(10):
+            print('repetition')
+            all_data = load_old_data(FOLDER, FILENAME)
+            #currents = [134.75, 134.75, 132.5, 130.75, 130.75, 130.5, 129.5, 128.5, 128.5, 126.5, 123, 123, 123, 123, 123, 123]
+            #cooling_duty_cycles = [.15, .2, .25, .3, .35, .4, .45, .5, .55, .6, .65, .7, .75, .8, .85, .9]
+            #currents = [130.75, 130.75, 130.5, 129.5, 128.5, 128.5, 126.5, 123, 123, 123, 123, 123, 123, 123]
+            #cooling_duty_cycles = [.3, .35, .4, .45, .5, .55, .6, .65, .7, .75, .8, .85, .9, .95]
+            currents = [133.25, 133.25, 132.25, 132.25, 132.25, 132.25, 132.0, 130.25, 130.25, 130.25, 129.5, 129.0, 128.75, 128.75, 126.5, 126.5, 125.75, 124.5, 123.5, 123.5, 121.75, 121.75, 121.5, 121.5, 121.5, 121.5, 121.5, 121.5]
+            cooling_duty_cycles = np.arange(0.25, 0.95, 0.025)
+            assert len(currents) == len(cooling_duty_cycles)
+            #    for duty_cycle in [.4, .5, .6, .7, .8, .85, .9, .95]:
+            for current, cooling_duty_cycle in zip(currents, cooling_duty_cycles):
+                print('----         DUTY CYCLE %.2f        ----' % cooling_duty_cycle)
 
-                reset_fpga('rp-f012ba.local', 'root', 'zeilinger')
-                rp = Pitaya('rp-f012ba.local', user='root', password='zeilinger')
-                rp.connect()
+                for iteration in range(1):
+                    print('----         ITERATION %d        ----' % iteration)
 
-                states = lambda *names: rp.pitaya.states(*names)
-                force = states('force')
-                null = states()
+                    reset_fpga('rp-f012ba.local', 'root', 'zeilinger')
+                    rp = Pitaya('rp-f012ba.local', user='root', password='zeilinger')
+                    rp.connect()
 
-                _initialized_ttl = []
-                def init_ttl(idx, start, stop):
-                    assert idx not in _initialized_ttl, 'ttl already initialized'
-                    _initialized_ttl.append(idx)
-                    rp.pitaya.set('ttl_ttl%d_start' % idx, start)
-                    rp.pitaya.set('ttl_ttl%d_end' % idx,  stop)
+                    states = lambda *names: rp.pitaya.states(*names)
+                    force = states('force')
+                    null = states()
 
-                rp.init(
-                    decimation=DECIMATION,
-                    N_zones=2,
-                    relative_length=RELATIVE_LENGTH,
-                    zone_edges=[1-cooling_duty_cycle, 1, None],
-                    target_frequencies=[6000, 150, None, None],
-                    curvature_filtering_starts=[15, 15, None, None]
-                    #curvature_filtering_starts=[16383, 16383, 16383, 16383]
-                )
+                    _initialized_ttl = []
+                    def init_ttl(idx, start, stop):
+                        assert idx not in _initialized_ttl, 'ttl already initialized'
+                        _initialized_ttl.append(idx)
+                        rp.pitaya.set('ttl_ttl%d_start' % idx, start)
+                        rp.pitaya.set('ttl_ttl%d_end' % idx,  stop)
 
-                set_current(CURRENT_BEGIN)
-                sleep(1)
-                set_current(current)
-
-                rp.pitaya.set('control_loop_sequence_player_stop_zone', 1)
-
-                if OLD_STYLE_DETECTION:
-                    pid_on, pid_off, cam_trig_ttl = program_old_style_detection(
-                        rp, init_ttl, MOT_LOADING_TIME, states
-                    )
-                else:
-                    pid_on, pid_off, cam_trig_ttl = program_new_style_detection(
-                        rp, init_ttl, MOT_LOADING_TIME, states
+                    rp.init(
+                        decimation=DECIMATION,
+                        N_zones=2,
+                        relative_length=RELATIVE_LENGTH,
+                        zone_edges=[1-cooling_duty_cycle, 1, None],
+                        target_frequencies=[6000, 150, None, None],
+                        curvature_filtering_starts=[15, 15, None, None]
+                        #curvature_filtering_starts=[16383, 16383, 16383, 16383]
                     )
 
-                rp.pitaya.set(
-                    'control_loop_sequence_player_stop_algorithm_after',
-                    MOT_LOADING_TIME-1
-                )
-                rp.pitaya.set(
-                    'control_loop_sequence_player_stop_after',
-                    MOT_LOADING_TIME-1
-                )
+                    set_current(CURRENT_BEGIN)
+                    sleep(1)
+                    set_current(current)
 
-                # TTL0: enable PID
-                init_ttl(0, pid_on, pid_off)
-                rp.pitaya.set('control_loop_pid_enable_en', states('ttl_ttl0_out'))
+                    rp.pitaya.set('control_loop_sequence_player_stop_zone', 1)
 
-                # TTL5: announcer
-                # do2 (Kanal 3) ist announcer
-                init_ttl(1, int(pid_on - ONE_MS), int(pid_on - ONE_MS + ONE_SECOND))
-                rp.pitaya.set('gpio_n_do2_en', states('ttl_ttl1_out'))
+                    if OLD_STYLE_DETECTION:
+                        pid_on, pid_off, cam_trig_ttl = program_old_style_detection(
+                            rp, init_ttl, MOT_LOADING_TIME, states
+                        )
+                    else:
+                        pid_on, pid_off, cam_trig_ttl = program_new_style_detection(
+                            rp, init_ttl, MOT_LOADING_TIME, states
+                        )
 
-                rp.enable_channel_b_pid(True, p=200, i=25, d=0, reset=False)
+                    rp.pitaya.set(
+                        'control_loop_sequence_player_stop_algorithm_after',
+                        MOT_LOADING_TIME-1
+                    )
+                    rp.pitaya.set(
+                        'control_loop_sequence_player_stop_after',
+                        MOT_LOADING_TIME-1
+                    )
 
-                rp.set_max_state(MAX_STATE)
-                rp.pitaya.set('control_loop_sequence_player_step_size', 8)
-                rp.pitaya.set('control_loop_sequence_player_decrease_step_size_after', 1000)
+                    # TTL0: enable PID
+                    init_ttl(0, pid_on, pid_off)
+                    rp.pitaya.set('control_loop_pid_enable_en', states('ttl_ttl0_out'))
 
-                rp.set_algorithm(0)
-                rp.set_enabled(0)
-                rp.pitaya.set('control_loop_sequence_player_start_clocks', 0)
+                    # TTL5: announcer
+                    # do2 (Kanal 3) ist announcer
+                    init_ttl(1, int(pid_on - ONE_MS), int(pid_on - ONE_MS + ONE_SECOND))
+                    rp.pitaya.set('gpio_n_do2_en', states('ttl_ttl1_out'))
 
-                #actual_length = int(LENGTH  * RELATIVE_LENGTH)
-                #first_feed_forward = np.array([0] * actual_length)
-                #rp.set_feed_forward(first_feed_forward)
-                rp.sync()
+                    rp.enable_channel_b_pid(True, p=200, i=25, d=0, reset=False)
 
-                # ---------------------------- START ALGORITHM ----------------------------
-                #if iteration == 0:
-                #    input('ready?')
+                    rp.set_max_state(MAX_STATE)
+                    rp.pitaya.set('control_loop_sequence_player_step_size', 8)
+                    rp.pitaya.set('control_loop_sequence_player_decrease_step_size_after', 1000)
 
-                acquiry_process, pipe = start_acquisition_process(old_style=OLD_STYLE_DETECTION)
+                    rp.set_algorithm(0)
+                    rp.set_enabled(0)
+                    rp.pitaya.set('control_loop_sequence_player_start_clocks', 0)
 
-                if not OLD_STYLE_DETECTION:
-                    new_style_record_background(rp, force, null)
+                    #actual_length = int(LENGTH  * RELATIVE_LENGTH)
+                    #first_feed_forward = np.array([0] * actual_length)
+                    #rp.set_feed_forward(first_feed_forward)
+                    rp.sync()
 
-                rp.set_enabled(1)
-                rp.set_algorithm(1)
-                rp.pitaya.set('control_loop_sequence_player_start_clocks', 1)
+                    # ---------------------------- START ALGORITHM ----------------------------
+                    #if iteration == 0:
+                    #    input('ready?')
 
-                if OLD_STYLE_DETECTION:
-                    data = do_old_style_detection(rp, force, null, cam_trig_ttl, MOT_LOADING_TIME)
-                else:
-                    data = do_new_style_detection(rp, cam_trig_ttl, pipe)
+                    acquiry_process, pipe = start_acquisition_process(old_style=OLD_STYLE_DETECTION)
 
-                iteration_data = all_data.get(cooling_duty_cycle, [])
-                iteration_data.append(data)
-                all_data[cooling_duty_cycle] = iteration_data
+                    if not OLD_STYLE_DETECTION:
+                        new_style_record_background(rp, force, null)
 
-                with open(FOLDER + FILENAME, 'wb') as f:
-                    pickle.dump(all_data, f)
+                    rp.set_enabled(1)
+                    rp.set_algorithm(1)
+                    rp.pitaya.set('control_loop_sequence_player_start_clocks', 1)
+
+                    if OLD_STYLE_DETECTION:
+                        data = do_old_style_detection(rp, force, null, cam_trig_ttl, MOT_LOADING_TIME)
+                    else:
+                        data = do_new_style_detection(rp, cam_trig_ttl, pipe)
+
+                    iteration_data = all_data.get(cooling_duty_cycle, [])
+                    iteration_data.append(data)
+                    all_data[cooling_duty_cycle] = iteration_data
+
+                    with open(FOLDER + FILENAME, 'wb') as f:
+                        pickle.dump(all_data, f)

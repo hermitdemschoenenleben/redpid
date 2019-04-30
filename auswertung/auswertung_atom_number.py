@@ -4,6 +4,7 @@ from matplotlib import pyplot as plt
 from gain_camera.utils import crop_imgs
 
 FOLDER = '/media/depot/data/afmot/atom-numbers/'
+FOLDER = '/home/ben/Schreibtisch/data/afmot_atom_numbers/'
 #FOLDER = '/media/depot/data/fake-afmot/atom-numbers/'
 
 input('not cropping!')
@@ -47,7 +48,7 @@ for duty_cycle, iterations in all_data.items():
         current_atom_numbers.append(N_afmot / N_mot * 100)
         mot_numbers.append(N_mot - zero)
 
-        """if duty_cycle > 0.6:
+        if duty_cycle > 0.6:
             #for img_idx in range(3):
             for img_idx in [0, 1, 2]:
                 plt.subplot(1, 3, 1)
@@ -56,7 +57,7 @@ for duty_cycle, iterations in all_data.items():
                 plt.pcolormesh(d['img_afmot'][img_idx], vmax=255)
                 plt.subplot(1, 3, 3)
                 plt.pcolormesh(crop_imgs(d['img_mot'])[img_idx], vmax=255)
-                plt.show()"""
+                plt.show()
 
     relative_atom_numbers.append(
         np.mean(current_atom_numbers)
