@@ -185,19 +185,19 @@ def program_new_style_detection(
     ONE_SECOND_CORRECTED = ONE_SECOND * freq_correction
     END_DELAY_CORRECTED = END_DELAY
 
+    repumping_delay = .1 * ONE_MS_CORRECTED
     repumping_time = 1 * ONE_MS_CORRECTED
-    nanospeed_after = 1 * ONE_MS_CORRECTED
+    nanospeed_after = (repumping_delay + repumping_time)
     if not absorption_detection:
         cooling_again_after = 1.3 * ONE_MS_CORRECTED
         camera_trigger_after = 1.25 * ONE_MS_CORRECTED
     else:
-        camera_trigger_after = 1.1 * ONE_MS_CORRECTED
+        camera_trigger_after = int(nanospeed_after + (0.05 * ONE_MS_CORRECTED))
         cooling_again_after = 100 * ONE_MS_CORRECTED
 
     # record background image
     nanospeed_trigger_0 = int(nanospeed_after)
     camera_trigger_0 = int(camera_trigger_after)
-
 
     pid_on = int(mot_loading_time * ONE_ITERATION_CORRECTED)
     pid_off = int(pid_on + END_DELAY_CORRECTED)
@@ -210,7 +210,7 @@ def program_new_style_detection(
     cooling_off = afmot_detection
     cooling_on_again = int(afmot_detection + cooling_again_after)
 
-    repumping_on = afmot_detection
+    repumping_on = int(afmot_detection + repumping_delay)
     repumping_off = int(repumping_on + repumping_time)
 
     camera_trigger_1 = int(afmot_detection + camera_trigger_after)
@@ -223,7 +223,7 @@ def program_new_style_detection(
     cooling_off_again = mot_detection
     cooling_last_time = int(mot_detection + cooling_again_after)
 
-    repumping_on_again = int(mot_start)
+    repumping_on_again = int(mot_start + repumping_delay)
     repumping_off_again = int(mot_detection + repumping_time)
 
     # this is after detection, just for checking how the MOT looks like
