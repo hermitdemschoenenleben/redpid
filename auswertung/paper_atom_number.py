@@ -1,3 +1,4 @@
+import dill
 import pickle
 import numpy as np
 from matplotlib import pyplot as plt
@@ -5,6 +6,9 @@ from gain_camera.utils import crop_imgs
 from ben.plot import plt, save_ma, save_paper, set_font_size
 from seaborn import color_palette
 
+palette = color_palette()
+palette = [palette[1], palette[0], *palette[2:]]
+markers = ('o', 'v', '^', 's', '*')
 set_font_size(15)
 
 FOLDER = '/media/depot/data/afmot/atom-numbers/'
@@ -77,17 +81,90 @@ print('!!', np.std(mot_numbers[:10] / np.mean(mot_numbers[:10])))
 print(len(mot_numbers))
 #asd
 
-plt.plot(duty_cycles, relative_atom_numbers)
-plt.errorbar(duty_cycles, relative_atom_numbers, yerr=relative_atom_numbers_std)
-plt.ylim([0, 110])
-plt.xlim([0, 1])
-plt.xlabel('cooling light duty cycle')
-plt.ylabel('relative atom number')
-#plt.savefig('afmot_relative_atom_number_too_good.svg')
-plt.grid()
-plt.xticks([0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1])
-plt.yticks([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
-plt.tight_layout()
+duty_cycles = [_ * 100 for _ in duty_cycles]
+plt.plot(duty_cycles, relative_atom_numbers, color=palette[1], marker=markers[1], label='7.6 kHz')
+plt.errorbar(duty_cycles, relative_atom_numbers, yerr=relative_atom_numbers_std, color=palette[1])
 
-save_paper('real_afmot_neu', svg=True)
+
+
+
+
+
+# PLOT REFERENCE DATA
+
+fake_folder = '/media/depot/fake_smot/'
+fake_dataset = (
+    '7.5 kHz',
+    'both_7.5kHz_d0',
+    list(np.linspace(0, 1, 41)),
+    1
+)
+name, fn, percentages, repetitions = fake_dataset
+species = 87
+with open(fake_folder + str(species) + '_' + fn + '.pickle', 'rb') as f:
+    data = dill.load(f)
+
+idx = lambda perc_idx, rep: rep * len(percentages) + perc_idx
+
+assert percentages[0] == 0
+offset = data[0]['N_smot']
+
+smot_numbers = [_['N_smot'] for _ in data]
+smot_numbers_std = [
+    (
+        np.std(list(
+            [_['N_smot'] for _ in data][idx(perc_idx, rep)]
+            for rep in range(repetitions)
+        ))
+    )
+    for perc_idx, perc in enumerate(percentages)
+]
+smot_numbers = [
+    (
+        np.mean(list(
+            smot_numbers[idx(perc_idx, rep)] - offset
+            #- initial_offsets[idx(perc_idx, rep)]
+            for rep in range(repetitions)
+        ))
+    )
+    for perc_idx, perc in enumerate(percentages)
+]
+
+#mot_numbers = [_['N_mot'] for _ in data]
+mot_numbers = [np.mean(_['atom_numbers'][-20:]) for _ in data]
+mot_numbers = [
+    (
+        np.mean(list(
+            mot_numbers[idx(perc_idx, rep)] - offset
+            #- initial_offsets[idx(perc_idx, rep)]
+            for rep in range(repetitions)
+        ))
+    )
+    for perc_idx, perc in enumerate(percentages)
+]
+
+results = np.array([sm / m *100 for sm, m in zip(smot_numbers, mot_numbers)])
+results[results<0] = 0
+
+"""plt.plot(
+    [_ * 100 for _ in percentages],
+    results,
+    label='AOM-switched dual-laser MOT',
+    linewidth=2
+)"""
+
+
+plt.ylim([0, 100])
+plt.xlim([0, 100])
+
+plt.xlabel(r'duty cycle $C$ in $\%$')
+plt.ylabel(r'relative atom number in $\%$')
+
+plt.grid()
+plt.xticks([0, 20, 40, 60, 80, 100])
+plt.yticks([0, 20, 40, 60, 80, 100])
+plt.tight_layout()
+plt.legend(loc='upper left')
+
+save_paper('real_afmot', svg=True)
 plt.show()
