@@ -113,9 +113,6 @@ if __name__ == '__main__':
 
             acquiry_process, pipe = start_acquisition_process(old_style=OLD_STYLE_DETECTION)
 
-            # FIXME: also remove in other experiments if not OLD_STYLE_DETECTION:
-            #    new_style_record_background(rp, force, null)
-
             rp.set_enabled(1)
             rp.set_algorithm(1)
             rp.pitaya.set('control_loop_sequence_player_start_clocks', 1)

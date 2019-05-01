@@ -17,17 +17,18 @@ from record_afmot_loading import start_acquisition_process, program_old_style_de
 
 
 FOLDER = '/home/ben/Schreibtisch/data/afmot_atom_numbers/'
-FILENAME = 'test-neu'
+FILENAME = '1.9kHz'
 
 OLD_STYLE_DETECTION = False
+LENGTH_FACTOR = 4
 DECIMATION = 5
-RELATIVE_LENGTH = 1 / (2**DECIMATION)
+RELATIVE_LENGTH = 1 / (2**DECIMATION) * LENGTH_FACTOR
 CURRENT_BEGIN = 130
 MIN_CURRENT = 121.5
 MAX_CURRENT = 150
 CURRENT_STEP = 2
 DETERMINE_CURRENTS = False
-MOT_LOADING_TIME = int(30 * BASE_FREQ / N_STATES)
+MOT_LOADING_TIME = int(60 * (BASE_FREQ / LENGTH_FACTOR) / N_STATES)
 
 
 def analyze_tuning_time(data, start, stop, tuning_value):
@@ -241,14 +242,13 @@ if __name__ == '__main__':
                         break
 
     else:
-        #currents = [134.75, 134.75, 132.5, 130.75, 130.75, 130.5, 129.5, 128.5, 128.5, 126.5, 123, 123, 123, 123, 123, 123]
-        #cooling_duty_cycles = [.15, .2, .25, .3, .35, .4, .45, .5, .55, .6, .65, .7, .75, .8, .85, .9]
-        #currents = [130.75, 130.75, 130.5, 129.5, 128.5, 128.5, 126.5, 123, 123, 123, 123, 123, 123, 123]
-        #cooling_duty_cycles = [.3, .35, .4, .45, .5, .55, .6, .65, .7, .75, .8, .85, .9, .95]
-        currents = [133.25, 133.25, 132.25, 132.25, 132.25, 132.25, 132.0, 130.25, 130.25, 130.25, 129.5, 129.0, 128.75, 128.75, 126.5, 126.5, 125.75, 124.5, 123.5, 123.5, 121.75, 121.75, 121.5, 121.5, 121.5, 121.5, 121.5]
-        #cooling_duty_cycles = np.arange(0.25, 0.95, 0.025)
-        cooling_duty_cycles = [.6, .2]
-        #    for duty_cycle in [.4, .5, .6, .7, .8, .85, .9, .95]:
+        cooling_duty_cycles = [
+            .1, .15, .2, .25, .3, .35, .4, .45, .5, .55,
+            .6, .65, .7, .75, .8, .85, .9, .95
+        ]
+        #currents = [150, 150, 150, 150]
+        currents = [150] * len(cooling_duty_cycles)
+        assert len(currents) == len(cooling_duty_cycles)
 
         archive = klepto.archives.dir_archive(FOLDER + FILENAME, serialized=True)
         archive.sync()
@@ -268,22 +268,9 @@ if __name__ == '__main__':
 
         archive['duty_cycles'] = cooling_duty_cycles
 
-        for current, cooling_duty_cycle in zip(currents, cooling_duty_cycles):
-            print('----         DUTY CYCLE %.2f        ----' % cooling_duty_cycle)
+        for repetition in range(100):
+            print('repetition', repetition)
 
-            for iteration in range(1):
-                print('----         ITERATION %d        ----' % iteration)
-
-        for repetition in range(10):
-            print('repetition')
-            all_data = load_old_data(FOLDER, FILENAME)
-            #currents = [134.75, 134.75, 132.5, 130.75, 130.75, 130.5, 129.5, 128.5, 128.5, 126.5, 123, 123, 123, 123, 123, 123]
-            #cooling_duty_cycles = [.15, .2, .25, .3, .35, .4, .45, .5, .55, .6, .65, .7, .75, .8, .85, .9]
-            #currents = [130.75, 130.75, 130.5, 129.5, 128.5, 128.5, 126.5, 123, 123, 123, 123, 123, 123, 123]
-            #cooling_duty_cycles = [.3, .35, .4, .45, .5, .55, .6, .65, .7, .75, .8, .85, .9, .95]
-            currents = [133.25, 133.25, 132.25, 132.25, 132.25, 132.25, 132.0, 130.25, 130.25, 130.25, 129.5, 129.0, 128.75, 128.75, 126.5, 126.5, 125.75, 124.5, 123.5, 123.5, 121.75, 121.75, 121.5, 121.5, 121.5, 121.5, 121.5, 121.5]
-            cooling_duty_cycles = np.arange(0.25, 0.95, 0.025)
-            assert len(currents) == len(cooling_duty_cycles)
             #    for duty_cycle in [.4, .5, .6, .7, .8, .85, .9, .95]:
             for current, cooling_duty_cycle in zip(currents, cooling_duty_cycles):
                 print('----         DUTY CYCLE %.2f        ----' % cooling_duty_cycle)
@@ -327,29 +314,25 @@ if __name__ == '__main__':
                             rp, init_ttl, MOT_LOADING_TIME, states
                         )
                     else:
-                        pid_on, pid_off, cam_trig_ttl = program_new_style_detection(
-                            rp, init_ttl, MOT_LOADING_TIME, states
+                        pid_on, pid_off, cam_trig_ttl, nanospeed_ttl = program_new_style_detection(
+                            rp, init_ttl, MOT_LOADING_TIME, states,
+                            LENGTH_FACTOR, absorption_detection=False
                         )
 
                     rp.pitaya.set(
                         'control_loop_sequence_player_stop_algorithm_after',
                         MOT_LOADING_TIME-1
                     )
-                else:
-                    pid_on, pid_off, cam_trig_ttl, nanospeed_ttl = program_new_style_detection(
-                        rp, init_ttl, MOT_LOADING_TIME, states
+                    rp.pitaya.set(
+                        'control_loop_sequence_player_stop_after',
+                        MOT_LOADING_TIME-1
                     )
 
                     # TTL0: enable PID
                     init_ttl(0, pid_on, pid_off)
                     rp.pitaya.set('control_loop_pid_enable_en', states('ttl_ttl0_out'))
 
-                    # TTL5: announcer
-                    # do2 (Kanal 3) ist announcer
-                    init_ttl(1, int(pid_on - ONE_MS), int(pid_on - ONE_MS + ONE_SECOND))
-                    rp.pitaya.set('gpio_n_do2_en', states('ttl_ttl1_out'))
-
-                rp.enable_channel_b_pid(True, p=200, i=25, d=0, reset=False)
+                    rp.enable_channel_b_pid(True, p=200, i=25, d=0, reset=False)
 
                     rp.set_algorithm(0)
                     rp.set_enabled(0)
@@ -365,9 +348,6 @@ if __name__ == '__main__':
                     #    input('ready?')
 
                     acquiry_process, pipe = start_acquisition_process(old_style=OLD_STYLE_DETECTION)
-
-                    if not OLD_STYLE_DETECTION:
-                        new_style_record_background(rp, force, null)
 
                     rp.set_enabled(1)
                     rp.set_algorithm(1)
