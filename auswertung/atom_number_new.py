@@ -51,9 +51,10 @@ for duty_cycle in archive['duty_cycles']:
         except KeyError:
             break
 
-        if iteration != 5:
-            iteration += 1
-            continue
+        
+        #if iteration != 5:
+        #    iteration += 1
+        #    continue
 
         zero = d['N_background']
 
@@ -63,12 +64,14 @@ for duty_cycle in archive['duty_cycles']:
         zero = sum_imgs(d['img_background'])
         N_afmot = sum_imgs(d['img_afmot']) - zero
         N_mot = sum_imgs(d['img_mot']) - zero
+        print('N_mot', N_mot)
 
         print('percentage', N_afmot / N_mot * 100)
         current_atom_numbers.append(N_afmot / N_mot * 100)
         mot_numbers.append(N_mot - zero)
 
-        if duty_cycle == .9:
+        #if duty_cycle == .9:
+        if False:
             plt.pcolormesh(d['img_mot'][2])
             plt.show()
             plt.pcolormesh(d['img_afmot'][2])

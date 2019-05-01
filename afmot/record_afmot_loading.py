@@ -180,17 +180,17 @@ def program_new_style_detection(
         rp, init_ttl, mot_loading_time, states, freq_correction=1,
         absorption_detection=False
     ):
-    ONE_MS_CORRECTED = ONE_MS * freq_correction
+    ONE_MS_CORRECTED = ONE_MS
     ONE_ITERATION_CORRECTED = ONE_ITERATION * freq_correction
-    ONE_SECOND_CORRECTED = ONE_SECOND * freq_correction
+    ONE_SECOND_CORRECTED = ONE_SECOND
     END_DELAY_CORRECTED = END_DELAY
 
     repumping_delay = .1 * ONE_MS_CORRECTED
-    repumping_time = 1 * ONE_MS_CORRECTED
+    repumping_time = .1 * ONE_MS_CORRECTED
     nanospeed_after = (repumping_delay + repumping_time)
     if not absorption_detection:
-        cooling_again_after = 1.3 * ONE_MS_CORRECTED
-        camera_trigger_after = 1.25 * ONE_MS_CORRECTED
+        camera_trigger_after = .25 * ONE_MS_CORRECTED
+        cooling_again_after = .3 * ONE_MS_CORRECTED
     else:
         camera_trigger_after = int(nanospeed_after + (0.05 * ONE_MS_CORRECTED))
         cooling_again_after = 100 * ONE_MS_CORRECTED
@@ -267,10 +267,10 @@ def program_new_style_detection(
 
 
 def program_new_style_detection_aom(rp, init_ttl, mot_loading_time, states, freq_correction):
-    ONE_MS_CORRECTED = ONE_MS * freq_correction
+    ONE_MS_CORRECTED = ONE_MS
     ONE_ITERATION_CORRECTED = ONE_ITERATION * freq_correction
-    ONE_SECOND_CORRECTED = ONE_SECOND * freq_correction
-    END_DELAY_CORRECTED = END_DELAY * freq_correction
+    ONE_SECOND_CORRECTED = ONE_SECOND
+    END_DELAY_CORRECTED = END_DELAY
 
     repumping_time = 1 * ONE_MS_CORRECTED
     cooling_again_after = 1.3 * ONE_MS_CORRECTED
@@ -336,16 +336,6 @@ def program_new_style_detection_aom(rp, init_ttl, mot_loading_time, states, freq
     rp.pitaya.set(CAM_TRIG_PIN, cam_trig_ttl)
 
     return pid_on, pid_off, cam_trig_ttl
-
-
-def new_style_record_background(rp, force, null):
-    rp.pitaya.set(AGILENT_NANOSPEED_PIN, force)
-    sleep(.05)
-    # record one frame for background
-    rp.pitaya.set(CAM_TRIG_PIN, force)
-    sleep(.05)
-    rp.pitaya.set(CAM_TRIG_PIN, null)
-    rp.pitaya.set(AGILENT_NANOSPEED_PIN, null)
 
 
 def do_new_style_detection(rp, cam_trig_ttl, nanospeed_ttl, pipe):

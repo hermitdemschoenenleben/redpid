@@ -12,8 +12,7 @@ from utils import counter_measurement, save_osci, arm_osci, N_BITS, LENGTH, \
     load_old_data, BASE_FREQ
 from registers import Pitaya
 from record_afmot_loading import start_acquisition_process, program_old_style_detection, \
-    do_old_style_detection, program_new_style_detection, do_new_style_detection, \
-    new_style_record_background
+    do_old_style_detection, program_new_style_detection, do_new_style_detection
 
 
 FOLDER = '/home/ben/Schreibtisch/data/afmot_atom_numbers/'
@@ -333,6 +332,9 @@ if __name__ == '__main__':
                     rp.pitaya.set('control_loop_pid_enable_en', states('ttl_ttl0_out'))
 
                     rp.enable_channel_b_pid(True, p=200, i=25, d=0, reset=False)
+                    rp.set_max_state(MAX_STATE)
+                    rp.pitaya.set('control_loop_sequence_player_step_size', 8)
+                    rp.pitaya.set('control_loop_sequence_player_decrease_step_size_after', 1000)
 
                     rp.set_algorithm(0)
                     rp.set_enabled(0)

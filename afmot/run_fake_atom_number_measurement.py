@@ -116,8 +116,6 @@ if __name__ == '__main__':
                 # ---------------------------- START ALGORITHM ----------------------------
                 acquiry_process, pipe = start_acquisition_process(old_style=False)
 
-                new_style_record_background(rp, force, null)
-
                 rp.set_enabled(1)
                 rp.set_algorithm(1)
                 rp.pitaya.set('control_loop_sequence_player_start_clocks', 1)
