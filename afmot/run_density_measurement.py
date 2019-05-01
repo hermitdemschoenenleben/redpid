@@ -13,14 +13,12 @@ from utils import counter_measurement, save_osci, arm_osci, N_BITS, LENGTH, \
     ONE_SECOND, ONE_MS, COOLING_PIN, CAM_TRIG_PIN, REPUMPING_PIN, END_DELAY, \
     load_old_data, BASE_FREQ
 from registers import Pitaya
-from record_afmot_loading import start_acquisition_process, program_old_style_detection, \
-    do_old_style_detection, program_new_style_detection, do_new_style_detection, \
-    new_style_record_background
+from record_afmot_loading import start_acquisition_process, program_new_style_detection, \
+    do_new_style_detection
 
 
 FOLDER = '/media/depot/data/afmot/atom-numbers/'
 FILENAME = 'test.pickle'
-OLD_STYLE_DETECTION = False
 LENGTH_FACTOR = 4
 DECIMATION = 5
 RELATIVE_LENGTH = 1 / (2**DECIMATION) * LENGTH_FACTOR
@@ -69,15 +67,10 @@ if __name__ == '__main__':
 
             rp.pitaya.set('control_loop_sequence_player_stop_zone', 1)
 
-            if OLD_STYLE_DETECTION:
-                pid_on, pid_off, cam_trig_ttl = program_old_style_detection(
-                    rp, init_ttl, MOT_LOADING_TIME, states
-                )
-            else:
-                pid_on, pid_off, cam_trig_ttl, nanospeed_ttl = program_new_style_detection(
-                    rp, init_ttl, MOT_LOADING_TIME, states,
-                    LENGTH_FACTOR, absorption_detection=True
-                )
+            pid_on, pid_off, cam_trig_ttl, nanospeed_ttl = program_new_style_detection(
+                rp, init_ttl, MOT_LOADING_TIME, states,
+                LENGTH_FACTOR, absorption_detection=True
+            )
 
             rp.pitaya.set(
                 'control_loop_sequence_player_stop_algorithm_after',
@@ -111,14 +104,10 @@ if __name__ == '__main__':
             #if iteration == 0:
             #    input('ready?')
 
-            acquiry_process, pipe = start_acquisition_process(old_style=OLD_STYLE_DETECTION)
+            acquiry_process, pipe = start_acquisition_process()
 
             rp.set_enabled(1)
             rp.set_algorithm(1)
             rp.pitaya.set('control_loop_sequence_player_start_clocks', 1)
 
-            if OLD_STYLE_DETECTION:
-                data = do_old_style_detection(rp, force, null, cam_trig_ttl, MOT_LOADING_TIME)
-            else:
-                data = do_new_style_detection(rp, cam_trig_ttl, nanospeed_ttl, pipe)
-            
+            data = do_new_style_detection(rp, cam_trig_ttl, nanospeed_ttl, pipe)

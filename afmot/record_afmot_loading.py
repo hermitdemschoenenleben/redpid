@@ -11,14 +11,10 @@ from utils import N_BITS, LENGTH, MAX_STATE, N_STATES, ONE_ITERATION, ITERATIONS
     AGILENT_NANOSPEED_PIN
 
 
-def start_acquisition_process(old_style=False):
+def start_acquisition_process():
     pipe, child_pipe = Pipe()
 
-    if old_style:
-        acquiry_process = Process(target=record_afmot_loading_old_style, args=(child_pipe,))
-    else:
-        acquiry_process = Process(target=record_afmot_loading_new_style, args=(child_pipe,))
-
+    acquiry_process = Process(target=record_afmot_loading_new_style, args=(child_pipe,))
     acquiry_process.start()
 
     # wait until acquiry process is ready
@@ -26,154 +22,6 @@ def start_acquisition_process(old_style=False):
     print('child is ready!')
 
     return acquiry_process, pipe
-
-
-def program_old_style_detection(rp, init_ttl, mot_loading_time, states):
-    pid_on = int(mot_loading_time * ONE_ITERATION)
-    pid_off = int(pid_on + END_DELAY)
-
-    cooling_off = pid_on
-    cooling_on_again = int(cooling_off + 2 * ONE_MS)
-
-    repumping_on = cooling_off
-    repumping_off = int(repumping_on + 2000 * ONE_SECOND)
-
-    camera_trigger = int(cooling_off + 2 * ONE_MS)
-
-    # TTL1: turn off cooling laser (it's inverse!)
-    # do3_en (Kanal 4) ist cooling laser
-    init_ttl(2, cooling_off, cooling_on_again)
-    rp.pitaya.set(COOLING_PIN, states('ttl_ttl2_out'))
-
-    # TTL2: turn on repumping laser
-    # do5_en (Kanal 6) ist repumper!
-    init_ttl(3, repumping_on, repumping_off)
-    rp.pitaya.set(REPUMPING_PIN, states('ttl_ttl3_out'))
-
-    # TTL4: trigger camera
-    # do4_en (Kanal 5) ist cam trigger gpio_n_do4_en
-    init_ttl(4, int(camera_trigger), int(camera_trigger + ONE_SECOND))
-    cam_trig_ttl = states('ttl_ttl4_out')
-    rp.pitaya.set(CAM_TRIG_PIN, cam_trig_ttl)
-
-    return pid_on, pid_off, cam_trig_ttl
-
-
-def do_old_style_detection(rp, force, null, cam_trig_ttl, mot_loading_time):
-    # Trigger the cam on repeatedly for recording the AF-MOT loading curve
-    start_time = time()
-    target_time = mot_loading_time / ITERATIONS_PER_SECOND
-
-    # stop the continuous triggering 2 seconds before the AF-MOT atom number
-    # is determined
-    while time() - start_time < target_time - 5:
-        rp.pitaya.set(CAM_TRIG_PIN, force)
-        sleep(.05)
-        rp.pitaya.set(CAM_TRIG_PIN, null)
-        sleep(.05)
-
-    # now, internal FPGA should control the camera trigger
-    rp.pitaya.set(CAM_TRIG_PIN, cam_trig_ttl)
-
-    print('waiting 5 seconds')
-    sleep(20)
-
-    # record MOT loading curve
-    start_time = time()
-    while time() - start_time < 30:
-        rp.pitaya.set(CAM_TRIG_PIN, force)
-        sleep(.05)
-        rp.pitaya.set(CAM_TRIG_PIN, null)
-        sleep(.05)
-
-    print('waiting again')
-    sleep(1.5)
-
-    rp.pitaya.set(CAM_TRIG_PIN, force)
-    sleep(.05)
-    rp.pitaya.set(CAM_TRIG_PIN, null)
-    sleep(.05)
-    data = pickle.loads(pipe.recv())
-    return data
-
-
-def record_afmot_loading_old_style(pipe=None):
-    c = Connection()
-    c.connect()
-    # important: using -12 or -12 leads to overexposed images for some reason...
-    exposure = -11
-    c.set_exposure_time(exposure)
-    c.enable_trigger(True)
-    c.run_continuous_acquisition()
-
-    AFMOT = 0
-    MOT = 1
-
-    d = {}
-    last_time = time()
-    times = []
-    atom_numbers = []
-
-    def wait_for_frame():
-        while True:
-            c.parameters.call_listeners()
-
-            if c.image_data is not None:
-                image_data = c.image_data
-                c.image_data = None
-                return time(), image_data
-
-    for j in [AFMOT, MOT]:
-        print('AMOT' if j == AFMOT else 'MOT')
-        for img_number in range(10000000):
-            print('record image number', img_number, end='\r')
-
-            new_time, imgs = wait_for_frame()
-            times.append(new_time)
-
-            atom_number = np.mean(
-                [img2count(img, exposure) for img in imgs]
-            )
-            atom_numbers.append(atom_number)
-
-            if new_time - last_time > 1 and img_number > 0:
-                #for img in imgs:
-                #    plt.pcolormesh(img)
-                #    plt.show()
-                if j == AFMOT:
-                    d['N_afmot'] = atom_number
-                    d['img_afmot_live'] = crop_imgs(last_imgs)
-                    d['img_afmot_after'] = crop_imgs(imgs)
-                else:
-                    d['N_mot'] = atom_number
-                    d['img_mot'] = crop_imgs(imgs)
-
-                break
-
-            last_time = new_time
-            last_imgs = imgs
-
-    times = [_ - times[0] for _ in times]
-
-    #plt.plot(times, atom_numbers)
-    #plt.grid()
-    #plt.show()
-
-    d.update({
-        'times': times,
-        'atom_numbers': atom_numbers,
-    })
-
-    #data.append(d)
-
-    #plt.plot([_['N_afmot'] for _ in data])
-    #plt.plot([_['N_mot'] for _ in data])
-    #plt.grid()
-    #plt.show()
-    if pipe is not None:
-        pipe.send(pickle.dumps(d))
-
-    return d
 
 
 def program_new_style_detection(
@@ -267,6 +115,7 @@ def program_new_style_detection(
 
 
 def program_new_style_detection_aom(rp, init_ttl, mot_loading_time, states, freq_correction):
+    nicht_auf_neustem_stand()
     ONE_MS_CORRECTED = ONE_MS
     ONE_ITERATION_CORRECTED = ONE_ITERATION * freq_correction
     ONE_SECOND_CORRECTED = ONE_SECOND

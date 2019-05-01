@@ -5,11 +5,7 @@ from matplotlib import pyplot as plt
 from gain_camera.utils import crop_imgs
 
 def sum_imgs(imgs):
-    #imgs = imgs[2]
     imgs = crop_imgs(imgs)
-    #for img in imgs:
-    #    plt.pcolormesh(img)
-    #    plt.show()
     img_sums = [np.sum(np.sum(img)) for img in imgs]
     return np.sum(img_sums)
 
@@ -45,16 +41,11 @@ for duty_cycle in archive['duty_cycles']:
     iteration = 0
     while True:
         print(iteration)
-    
+
         try:
             d = _get(duty_cycle, iteration)
         except KeyError:
             break
-
-        
-        #if iteration != 5:
-        #    iteration += 1
-        #    continue
 
         zero = d['N_background']
 
@@ -64,21 +55,13 @@ for duty_cycle in archive['duty_cycles']:
         zero = sum_imgs(d['img_background'])
         N_afmot = sum_imgs(d['img_afmot']) - zero
         N_mot = sum_imgs(d['img_mot']) - zero
-        print('N_mot', N_mot)
 
         print('percentage', N_afmot / N_mot * 100)
         current_atom_numbers.append(N_afmot / N_mot * 100)
         mot_numbers.append(N_mot - zero)
 
-        #if duty_cycle == .9:
-        if False:
-            plt.pcolormesh(d['img_mot'][2])
-            plt.show()
-            plt.pcolormesh(d['img_afmot'][2])
-            plt.show()
-
         iteration += 1
-    
+
     relative_atom_numbers.append(
         np.mean(current_atom_numbers)
     )
