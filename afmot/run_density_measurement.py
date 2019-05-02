@@ -36,7 +36,7 @@ if __name__ == '__main__':
     for cooling_duty_cycle in cooling_duty_cycles:
         print('----         DUTY CYCLE %.2f        ----' % cooling_duty_cycle)
 
-        for iteration in range(10):
+        for iteration in range(30):
             #input('ready?')
             print('----         ITERATION %d        ----' % iteration)
 

@@ -37,7 +37,7 @@ def program_new_style_detection(
     repumping_time = .1 * ONE_MS_CORRECTED
     nanospeed_after = (repumping_delay + repumping_time)
     if not absorption_detection:
-        # we shouldn't do it too early because it may the PID 1ms 
+        # we shouldn't do it too early because it may the PID 1ms
         # to take over from AF-MOT operation
         camera_trigger_after = 1 * ONE_MS_CORRECTED
         cooling_again_after = 1.05 * ONE_MS_CORRECTED
