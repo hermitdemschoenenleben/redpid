@@ -34,7 +34,7 @@ def program_new_style_detection(
     END_DELAY_CORRECTED = END_DELAY
 
     repumping_delay = .1 * ONE_MS_CORRECTED
-    repumping_time = .1 * ONE_MS_CORRECTED
+    repumping_time = .8 * ONE_MS_CORRECTED
     nanospeed_after = (repumping_delay + repumping_time)
     if not absorption_detection:
         # we shouldn't do it too early because it may the PID 1ms
@@ -42,7 +42,7 @@ def program_new_style_detection(
         camera_trigger_after = 1 * ONE_MS_CORRECTED
         cooling_again_after = 1.05 * ONE_MS_CORRECTED
     else:
-        camera_trigger_after = int(nanospeed_after + (0.05 * ONE_MS_CORRECTED))
+        camera_trigger_after = int(nanospeed_after + (0.2 * ONE_MS_CORRECTED))
         cooling_again_after = 100 * ONE_MS_CORRECTED
 
     # record background image
@@ -107,6 +107,7 @@ def program_new_style_detection(
     rp.pitaya.set(CAM_TRIG_PIN, cam_trig_ttl)
 
     # Agilent
+    
     init_ttl(10, int(nanospeed_trigger_0), int(nanospeed_trigger_0 + ONE_SECOND_CORRECTED))
     init_ttl(1, int(nanospeed_trigger_1), int(nanospeed_trigger_1 + ONE_SECOND_CORRECTED))
     init_ttl(9, int(nanospeed_trigger_2), int(nanospeed_trigger_2 + ONE_SECOND_CORRECTED))

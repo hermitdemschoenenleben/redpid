@@ -27,7 +27,8 @@ MIN_CURRENT = 121.5
 MAX_CURRENT = 150
 CURRENT_STEP = 2
 DETERMINE_CURRENTS = False
-MOT_LOADING_TIME = int(60 * (BASE_FREQ / LENGTH_FACTOR) / N_STATES)
+#input('30')
+MOT_LOADING_TIME = int(40 * (BASE_FREQ / LENGTH_FACTOR) / N_STATES)
 
 
 if __name__ == '__main__':
@@ -37,7 +38,7 @@ if __name__ == '__main__':
         print('----         DUTY CYCLE %.2f        ----' % cooling_duty_cycle)
 
         for iteration in range(30):
-            #input('ready?')
+            input('ready?')
             print('----         ITERATION %d        ----' % iteration)
 
             reset_fpga('rp-f012ba.local', 'root', 'zeilinger')
