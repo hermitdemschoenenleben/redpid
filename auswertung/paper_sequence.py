@@ -9,7 +9,7 @@ from ben.mplstyles import figsize
 from ben.utils.plot import set_aspect
 
 
-FONT_SIZE = 14
+FONT_SIZE = 16
 INSET_COLOR = '#fff4f4'
 
 set_font_size(FONT_SIZE)
@@ -51,9 +51,9 @@ def get_control_signal(folder):
 def get_frequencies(folder):
     data = []
     times = []
-    
+
     show_plot = False
-    
+
     n = list(int(_) for _ in np.arange(50, 11851, 50))[-1]
 
     fn = 'development_%sCH2.csv' % n
@@ -85,14 +85,14 @@ def plot_control_signal_and_frequencies(folder):
 
     [times_c, control] = get_control_signal(folder)
     [times_f, frequencies] = get_frequencies(folder + 'frequencies/')
-    
+
     plt.clf()
 
     # plot control signal
     ax = plt.subplot(column[1])
 
     plt.grid()
-    
+
     control_shift = 127
     plt.plot(
         [_2 - control_shift for _2 in (
@@ -110,18 +110,18 @@ def plot_control_signal_and_frequencies(folder):
     plt.xlabel(r'time in \SI{}{\micro\second}')
 
 
-    plt.ylabel('laser current in mA')
+    plt.ylabel('current in mA')
     #plt.tight_layout()
 
     # plot frequencies
     ax = plt.subplot(column[0])
     ax.get_yaxis().set_label_coords(-.08,0.5)
-  
+
     plt.grid()
 
     plt.ylabel('beat note in GHz')
-    plt.text(37, 7.1, 'repumping frequency', horizontalalignment='center')
-    plt.text(37, .53, 'cooling frequency', horizontalalignment='center')
+    plt.text(37, 6.1, 'repumping', horizontalalignment='center')
+    plt.text(37, .53, 'cooling', horizontalalignment='center')
 
     len_f = int(len(times_f) / 200 * time_length)
     shift = 0
@@ -130,14 +130,14 @@ def plot_control_signal_and_frequencies(folder):
     plt.plot((-1000, 10000), (.25, .25), 'k--')
 
     plt.plot(times_f[:len_f], frequencies[shift:shift + len_f])
-    plt.ylim((-0.2, 7.9))
+    plt.ylim((-0.2, 7.4))
     plt.xlim((0, time_length))
     plt.xticks(visible=False)
 
 
     plt.tight_layout()
     #plt.savefig(folder + get_fn(i))
-    
+
     save_paper('real_jump_and_current')
     plt.show()
 

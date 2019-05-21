@@ -10,7 +10,7 @@ import seaborn as sns
 #sns.set_style('white')
 #sns.set_context('talk')
 
-FONT_SIZE = 14
+FONT_SIZE = 16
 
 set_font_size(FONT_SIZE)
 row = gridspec.GridSpec(1, 2, width_ratios=[2, 1])
@@ -42,7 +42,7 @@ if __name__ == '__main__':
 
         plt.clf()
         plt.gcf().set_size_inches(*figsize(1.65))
-        
+
         plt.subplot(row[1])
         bin_max = y + 0.02
         bin_min = y - 0.02
@@ -62,8 +62,8 @@ if __name__ == '__main__':
         #plt.savefig(output_folder + 'frequency-jump-histogram-%d.png' % i, transparent=True)
         #plt.show()
         #plt.clf()
-        
-          
+
+
         plt.subplot(row[0])
 
         # plot line width
@@ -76,7 +76,7 @@ if __name__ == '__main__':
         ):
             rect = Rectangle((0, y + shift), 10000, height)
             # Create patch collection with specified colour/alpha
-           
+
             pc = PatchCollection(
                 [rect], facecolor=color,
                 edgecolor=color
@@ -97,8 +97,8 @@ if __name__ == '__main__':
         plt.xlabel(r'time in \SI{}{\micro\second}')
 
         plt.tight_layout()
-        plt.savefig(output_folder + 'frequency-jump-zoom-and-hist-%d.eps' % i)
-        #save_paper('frequency-jump-zoom-and-hist-%d' % i, svg=True)
+        #plt.savefig(output_folder + 'frequency-jump-zoom-and-hist-%d.eps' % i)
+        save_paper('frequency-jump-zoom-and-hist-%d' % i, svg=True)
         #plt.show()
         plt.clf()
 
